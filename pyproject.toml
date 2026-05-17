@@ -11,6 +11,9 @@ dependencies = [
     "pydantic>=2.8",
     "python-dotenv>=1.0",
     "google-genai>=1.0",   # provider Gemini (controle manual de tool calls — pré-requisito do Modo Debug)
+    "fastapi>=0.110",      # backend HTTP da nova UI Next.js (Fase 1 da Sprint 3)
+    "uvicorn[standard]>=0.27",  # ASGI server pro FastAPI
+    "sse-starlette>=2.0",  # Server-Sent Events nativos pra Starlette/FastAPI
 ]
 
 [project.optional-dependencies]
