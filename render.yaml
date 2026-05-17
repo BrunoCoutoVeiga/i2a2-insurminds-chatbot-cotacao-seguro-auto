@@ -1,0 +1,58 @@
+# Render Blueprint — declarative config pra deploy do backend FastAPI.
+#
+# Como usar:
+#   1. Faça push deste arquivo pra branch main do repo no GitHub.
+#   2. No Render (https://render.com), clique "New" → "Blueprint".
+#   3. Selecione o repo BrunoCoutoVeiga/insurmind-chatbot.
+#   4. Render lê este YAML e propõe a config — confirme e crie.
+#   5. Após o serviço subir, vá em "Environment" e preencha as 2 secrets
+#      (ANTHROPIC_API_KEY + INSURMIND_CORS_ORIGINS).
+#   6. Triggere um manual deploy pra aplicar as secrets.
+#
+# Alternativa (sem Blueprint): "New" → "Web Service" e copie os campos manualmente.
+
+services:
+  - type: web
+    name: insurmind-api
+    runtime: python
+    plan: free                # 750h/mês, sleep após 15min idle
+    region: oregon            # us-west; trocar pra "virginia" se preferir us-east
+
+    # Versão Python (3.12 pra casar com .venv local)
+    pythonVersion: "3.12"
+
+    # BUILD: instala deps + gera o índice ChromaDB. O ingest_kb.py baixa o
+    # modelo e5-base (~500MB) na primeira execução — fica cached no container.
+    # Demora ~3-5 min na primeira build, depois é incremental.
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -e .
+      python scripts/ingest_kb.py
+
+    # START: uvicorn ouvindo na porta que o Render injeta via $PORT.
+    # --host 0.0.0.0 é obrigatório (sem isso o serviço não recebe tráfego externo).
+    startCommand: uvicorn insurmind.api:app --host 0.0.0.0 --port $PORT
+
+    # Healthcheck pro Render saber quando o serviço subiu e quando recuperar
+    # após sleep. /api/health responde 200 com JSON {status:"ok", provider, tools_count}.
+    healthCheckPath: /api/health
+
+    # Variáveis de ambiente. As que têm `sync: false` precisam ser preenchidas
+    # MANUALMENTE no dashboard do Render (são secrets, não vão pro YAML público).
+    envVars:
+      - key: INSURMIND_LLM
+        value: anthropic_api
+
+      - key: INSURMIND_LOG_LEVEL
+        value: INFO
+
+      # ⚠️ SECRET — preencher no dashboard do Render após o serviço ser criado.
+      # Pega em https://console.anthropic.com/settings/keys
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      # ⚠️ SECRET — preencher DEPOIS do deploy do frontend no Vercel.
+      # Formato: "https://insurmind-chatbot-xyz.vercel.app" (sem barra no final).
+      # Se quiser múltiplas origins, separar por vírgula.
+      - key: INSURMIND_CORS_ORIGINS
+        sync: false
