@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./MessageBubble";
 import type { ChatMessage } from "@/lib/types";
 
@@ -27,7 +26,7 @@ export function ChatMessages({
   const showWelcome = messages.length === 0 && !isLoading;
 
   return (
-    <ScrollArea className="h-full">
+    <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="space-y-4 px-4 py-6">
         {showWelcome && (
           <MessageBubble
@@ -86,6 +85,6 @@ export function ChatMessages({
 
         <div ref={bottomRef} />
       </div>
-    </ScrollArea>
+    </div>
   );
 }

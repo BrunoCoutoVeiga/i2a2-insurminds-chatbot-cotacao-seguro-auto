@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { eventLabels, type AgentEvent } from "@/lib/types";
 import { EventCard } from "./EventCard";
 
@@ -34,7 +33,10 @@ export function DebugPanel({ events, stepIndex, onNext, onSkipToEnd }: Props) {
         </p>
       </header>
 
-      <ScrollArea className="flex-1 px-3 py-3">
+      {/* Usar div nativo com overflow-y-auto + min-h-0 pra que o flex column
+         funcione corretamente — ScrollArea do Radix tem nuances com flex que
+         impedem o scroll quando o conteúdo cresce (ex.: JSON expandido). */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
         {events.length === 0 ? (
           <div className="rounded border border-dashed border-zinc-300 bg-white px-4 py-8 text-center text-sm text-zinc-500">
             Faça uma pergunta no chat ao lado pra ver os passos do agente
@@ -52,7 +54,7 @@ export function DebugPanel({ events, stepIndex, onNext, onSkipToEnd }: Props) {
             ))}
           </div>
         )}
-      </ScrollArea>
+      </div>
 
       {events.length > 0 && (
         <footer className="border-t border-zinc-200 bg-white px-3 py-3 space-y-2">
