@@ -13,6 +13,9 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import type { AgentEvent } from "@/lib/types";
+import { AgentNode } from "./AgentNode";
+
+const nodeTypes = { agent: AgentNode };
 
 interface Props {
   events: AgentEvent[];
@@ -185,31 +188,36 @@ export function AgentDiagram({ events, stepIndex }: Props) {
     () => [
       {
         id: NODE.USER,
-        position: { x: 0, y: 160 },
+        position: { x: 0, y: 200 },
         data: { label: "👤 Usuário" },
         style: nodeStyle(activeNodes.has(NODE.USER), COLOR.USER),
         sourcePosition: Position.Right,
         targetPosition: Position.Right,
       },
       {
+        // Agent é custom node: tem 4 handles nomeados (from-user, to-tools,
+        // to-llm, from-llm, to-user) pra suportar conexões em todas as direções.
         id: NODE.AGENT,
-        position: { x: 180, y: 160 },
+        type: "agent",
+        position: { x: 200, y: 200 },
         data: { label: "🤖 Agente\n(orquestrador)" },
-        style: { ...nodeStyle(activeNodes.has(NODE.AGENT), COLOR.AGENT), whiteSpace: "pre-line" as const, minWidth: 150 },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
+        style: {
+          ...nodeStyle(activeNodes.has(NODE.AGENT), COLOR.AGENT),
+          minWidth: 150,
+        },
       },
       {
+        // LLM EM CIMA do Agent (mesma coluna X aproximada)
         id: NODE.LLM,
-        position: { x: 380, y: 30 },
+        position: { x: 215, y: 50 },
         data: { label: "🧠 LLM" },
         style: nodeStyle(activeNodes.has(NODE.LLM), COLOR.LLM),
-        sourcePosition: Position.Left,
+        sourcePosition: Position.Bottom,
         targetPosition: Position.Bottom,
       },
       {
         id: NODE.RETRIEVE,
-        position: { x: 380, y: 120 },
+        position: { x: 430, y: 130 },
         data: { label: "🔍 retrieve_kb" },
         style: nodeStyle(activeNodes.has(NODE.RETRIEVE), COLOR.TOOL),
         sourcePosition: Position.Right,
@@ -217,21 +225,21 @@ export function AgentDiagram({ events, stepIndex }: Props) {
       },
       {
         id: NODE.QUOTE,
-        position: { x: 380, y: 190 },
+        position: { x: 430, y: 200 },
         data: { label: "💰 compute_quote" },
         style: nodeStyle(activeNodes.has(NODE.QUOTE), COLOR.TOOL),
         targetPosition: Position.Left,
       },
       {
         id: NODE.ESCALATE,
-        position: { x: 380, y: 260 },
+        position: { x: 430, y: 270 },
         data: { label: "📞 escalar_humano" },
         style: nodeStyle(activeNodes.has(NODE.ESCALATE), COLOR.TOOL),
         targetPosition: Position.Left,
       },
       {
         id: NODE.KB,
-        position: { x: 600, y: 120 },
+        position: { x: 660, y: 130 },
         data: { label: "🗄️ ChromaDB\n(KB vetorial)" },
         style: { ...nodeStyle(activeNodes.has(NODE.KB), COLOR.KB), whiteSpace: "pre-line" as const },
         targetPosition: Position.Left,
@@ -246,12 +254,16 @@ export function AgentDiagram({ events, stepIndex }: Props) {
       source: string,
       target: string,
       color: string,
+      sourceHandle?: string,
+      targetHandle?: string,
     ): Edge => {
       const active = activeEdges.has(id);
       return {
         id,
         source,
         target,
+        sourceHandle,
+        targetHandle,
         animated: active,
         style: {
           stroke: active ? color : "#d4d4d8",
@@ -268,17 +280,23 @@ export function AgentDiagram({ events, stepIndex }: Props) {
       };
     };
     return [
-      make(EDGE.USER_AGENT, NODE.USER, NODE.AGENT, COLOR.USER),
-      make(EDGE.AGENT_LLM, NODE.AGENT, NODE.LLM, COLOR.LLM),
-      make(EDGE.AGENT_RETRIEVE, NODE.AGENT, NODE.RETRIEVE, COLOR.TOOL),
-      make(EDGE.AGENT_QUOTE, NODE.AGENT, NODE.QUOTE, COLOR.TOOL),
-      make(EDGE.AGENT_ESCALATE, NODE.AGENT, NODE.ESCALATE, COLOR.TOOL),
+      // User → Agent (entra pela esquerda do Agent)
+      make(EDGE.USER_AGENT, NODE.USER, NODE.AGENT, COLOR.USER, undefined, "from-user"),
+      // Agent → LLM (sai pelo TOPO do Agent, entra pelo bottom do LLM)
+      make(EDGE.AGENT_LLM, NODE.AGENT, NODE.LLM, COLOR.LLM, "to-llm"),
+      // Agent → Tools (sai pela direita do Agent)
+      make(EDGE.AGENT_RETRIEVE, NODE.AGENT, NODE.RETRIEVE, COLOR.TOOL, "to-tools"),
+      make(EDGE.AGENT_QUOTE, NODE.AGENT, NODE.QUOTE, COLOR.TOOL, "to-tools"),
+      make(EDGE.AGENT_ESCALATE, NODE.AGENT, NODE.ESCALATE, COLOR.TOOL, "to-tools"),
+      // retrieve_kb → ChromaDB
       make(EDGE.RETRIEVE_KB, NODE.RETRIEVE, NODE.KB, COLOR.KB),
       {
-        // Edge "agent → user" (resposta final) — desenhada por baixo dos outros
+        // Agent → User (resposta final) — só visível quando ativa
+        // Sai pela esquerda do Agent (handle "to-user"), entra na direita do User
         id: EDGE.AGENT_USER,
         source: NODE.AGENT,
         target: NODE.USER,
+        sourceHandle: "to-user",
         type: "bezier",
         animated: activeEdges.has(EDGE.AGENT_USER),
         style: {
@@ -302,6 +320,7 @@ export function AgentDiagram({ events, stepIndex }: Props) {
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.05, minZoom: 0.5, maxZoom: 1.5 }}
         minZoom={0.3}
