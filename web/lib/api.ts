@@ -47,21 +47,25 @@ export async function streamChat(
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
 
+  // SSE separator pode ser \n\n (LF) OU \r\n\r\n (CRLF) — sse-starlette usa CRLF.
+  // Sem normalização, o split por \n\n nunca encontra fronteira e concatena
+  // todos os eventos numa string que quebra o JSON.parse.
+  const SSE_SEP = /\r?\n\r?\n/;
+
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    // SSE messages são separadas por \n\n (ou \r\n\r\n em alguns servidores)
-    let sepIdx;
-    while ((sepIdx = buffer.indexOf("\n\n")) !== -1) {
-      const raw = buffer.slice(0, sepIdx);
-      buffer = buffer.slice(sepIdx + 2);
+    let match: RegExpExecArray | null;
+    while ((match = SSE_SEP.exec(buffer)) !== null) {
+      const raw = buffer.slice(0, match.index);
+      buffer = buffer.slice(match.index + match[0].length);
       const ev = parseSseMessage(raw);
       if (ev) onEvent(ev);
     }
   }
-  // Flush qualquer evento pendente no buffer (raro)
+  // Flush qualquer evento pendente no buffer (raro — ocorre se stream encerrar sem \n\n final)
   if (buffer.trim()) {
     const ev = parseSseMessage(buffer);
     if (ev) onEvent(ev);
