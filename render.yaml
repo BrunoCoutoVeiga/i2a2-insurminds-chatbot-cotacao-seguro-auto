@@ -18,9 +18,6 @@ services:
     plan: free                # 750h/mês, sleep após 15min idle
     region: oregon            # us-west; trocar pra "virginia" se preferir us-east
 
-    # Versão Python (3.12 pra casar com .venv local)
-    pythonVersion: "3.12"
-
     # BUILD: instala deps + gera o índice ChromaDB. O ingest_kb.py baixa o
     # modelo e5-base (~500MB) na primeira execução — fica cached no container.
     # Demora ~3-5 min na primeira build, depois é incremental.
@@ -40,6 +37,11 @@ services:
     # Variáveis de ambiente. As que têm `sync: false` precisam ser preenchidas
     # MANUALMENTE no dashboard do Render (são secrets, não vão pro YAML público).
     envVars:
+      # Versão Python (3.12 pra casar com .venv local). No schema do Render,
+      # versão de Python vai como env var, não como campo do serviço.
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+
       - key: INSURMIND_LLM
         value: anthropic_api
 
