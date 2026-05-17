@@ -34,7 +34,7 @@ export function DebugPanel({ events, stepIndex, onNext, onSkipToEnd }: Props) {
       </header>
 
       {/* Diagrama animado (Fase 3) — altura fixa pra não tomar tudo */}
-      <div className="h-[300px] shrink-0 border-b border-zinc-200">
+      <div className="h-[380px] shrink-0 border-b border-zinc-200">
         <AgentDiagram events={events} stepIndex={stepIndex} />
       </div>
 

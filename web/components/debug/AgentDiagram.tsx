@@ -185,7 +185,7 @@ export function AgentDiagram({ events, stepIndex }: Props) {
     () => [
       {
         id: NODE.USER,
-        position: { x: 30, y: 180 },
+        position: { x: 0, y: 160 },
         data: { label: "👤 Usuário" },
         style: nodeStyle(activeNodes.has(NODE.USER), COLOR.USER),
         sourcePosition: Position.Right,
@@ -193,7 +193,7 @@ export function AgentDiagram({ events, stepIndex }: Props) {
       },
       {
         id: NODE.AGENT,
-        position: { x: 240, y: 180 },
+        position: { x: 180, y: 160 },
         data: { label: "🤖 Agente\n(orquestrador)" },
         style: { ...nodeStyle(activeNodes.has(NODE.AGENT), COLOR.AGENT), whiteSpace: "pre-line" as const, minWidth: 150 },
         sourcePosition: Position.Right,
@@ -201,7 +201,7 @@ export function AgentDiagram({ events, stepIndex }: Props) {
       },
       {
         id: NODE.LLM,
-        position: { x: 500, y: 30 },
+        position: { x: 380, y: 30 },
         data: { label: "🧠 LLM" },
         style: nodeStyle(activeNodes.has(NODE.LLM), COLOR.LLM),
         sourcePosition: Position.Left,
@@ -209,7 +209,7 @@ export function AgentDiagram({ events, stepIndex }: Props) {
       },
       {
         id: NODE.RETRIEVE,
-        position: { x: 500, y: 130 },
+        position: { x: 380, y: 120 },
         data: { label: "🔍 retrieve_kb" },
         style: nodeStyle(activeNodes.has(NODE.RETRIEVE), COLOR.TOOL),
         sourcePosition: Position.Right,
@@ -217,21 +217,21 @@ export function AgentDiagram({ events, stepIndex }: Props) {
       },
       {
         id: NODE.QUOTE,
-        position: { x: 500, y: 200 },
+        position: { x: 380, y: 190 },
         data: { label: "💰 compute_quote" },
         style: nodeStyle(activeNodes.has(NODE.QUOTE), COLOR.TOOL),
         targetPosition: Position.Left,
       },
       {
         id: NODE.ESCALATE,
-        position: { x: 500, y: 270 },
+        position: { x: 380, y: 260 },
         data: { label: "📞 escalar_humano" },
         style: nodeStyle(activeNodes.has(NODE.ESCALATE), COLOR.TOOL),
         targetPosition: Position.Left,
       },
       {
         id: NODE.KB,
-        position: { x: 740, y: 130 },
+        position: { x: 600, y: 120 },
         data: { label: "🗄️ ChromaDB\n(KB vetorial)" },
         style: { ...nodeStyle(activeNodes.has(NODE.KB), COLOR.KB), whiteSpace: "pre-line" as const },
         targetPosition: Position.Left,
@@ -303,7 +303,9 @@ export function AgentDiagram({ events, stepIndex }: Props) {
         nodes={nodes}
         edges={edges}
         fitView
-        fitViewOptions={{ padding: 0.15 }}
+        fitViewOptions={{ padding: 0.05, minZoom: 0.5, maxZoom: 1.5 }}
+        minZoom={0.3}
+        maxZoom={2}
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
         nodesConnectable={false}
