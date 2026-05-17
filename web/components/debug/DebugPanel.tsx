@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { eventLabels, type AgentEvent } from "@/lib/types";
+import { AgentDiagram } from "./AgentDiagram";
 import { EventCard } from "./EventCard";
 
 interface Props {
@@ -27,15 +28,18 @@ export function DebugPanel({ events, stepIndex, onNext, onSkipToEnd }: Props) {
           </h2>
         </div>
         <p className="mt-1 text-xs text-zinc-500">
-          Cada passo do agente aparece conforme você clica em{" "}
-          <strong>▶ Próximo passo</strong>. (Fase 3 trará o diagrama animado
-          de componentes.)
+          Diagrama animado em cima mostra qual componente está ativo no passo
+          atual; timeline embaixo tem o detalhe técnico de cada evento.
         </p>
       </header>
 
-      {/* Usar div nativo com overflow-y-auto + min-h-0 pra que o flex column
-         funcione corretamente — ScrollArea do Radix tem nuances com flex que
-         impedem o scroll quando o conteúdo cresce (ex.: JSON expandido). */}
+      {/* Diagrama animado (Fase 3) — altura fixa pra não tomar tudo */}
+      <div className="h-[300px] shrink-0 border-b border-zinc-200">
+        <AgentDiagram events={events} stepIndex={stepIndex} />
+      </div>
+
+      {/* Timeline de eventos — div nativo com overflow-y-auto + min-h-0 (vide
+         comentário do fix de scroll do commit 358d9fb). */}
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
         {events.length === 0 ? (
           <div className="rounded border border-dashed border-zinc-300 bg-white px-4 py-8 text-center text-sm text-zinc-500">
