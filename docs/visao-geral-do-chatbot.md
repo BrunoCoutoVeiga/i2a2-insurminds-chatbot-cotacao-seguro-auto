@@ -742,3 +742,103 @@ Todas registradas em detalhe no [RELATORIO.md](../RELATORIO.md), seção por se�
 **Próxima atualização deste documento:** após o marco 21/05, com prints da demo funcionando.
 
 **Dúvidas, sugestões ou pedidos de correção:** chat do grupo no WhatsApp, ou comentar diretamente no RELATORIO.md no repo.
+
+---
+
+## Addendum 2026-05-17 — Sprints 1, 2 e 3 concluídas (12 dias antes do prazo)
+
+> Este documento original foi escrito em 2026-05-16 antecipando o roadmap. O que abaixo virou realidade em **1 dia** (2026-05-17). Detalhes completos por frente em [RELATORIO.md](../RELATORIO.md) seção "2026-05-17 — Sprint 3 implementação".
+
+### Status real vs. plano
+
+| Sprint | Plano original | Status |
+|---|---|---|
+| Sprint 1 (15-21/05) | FAQ via RAG + cotação mock | ✅ Cumprida em 2026-05-16 |
+| Sprint 2 (22-27/05) | Refino + Modo Debug + deploy Streamlit | ✅ Cumprida em 2026-05-16/17 — Modo Debug step-by-step com Gemini provider funcional |
+| Sprint 3 (28-29/05) | QA + slides + ensaio + entrega | 🟡 **Antecipada e expandida** em 2026-05-17 — entregue: UI Next.js + diagrama animado + provider Anthropic API. Falta só QA + slides + deploy. |
+
+### O que ficou novo
+
+**1. UI Next.js paralela à Streamlit**
+- Stack moderna: Next.js 16 + React 19 + Tailwind v4 + shadcn/ui.
+- Backend FastAPI separado (`src/insurmind/api.py`) expondo o agente via Server-Sent Events.
+- A Streamlit continua existindo — é a UI mais simples pra rodar localmente; a Next.js é o caminho pra deploy cloud.
+
+**2. Modo Debug v2 — diagrama animado**
+- Grafo React Flow mostrando User → Agente → LLM/Tools/ChromaDB.
+- Nodes acendem e setas animam conforme o passo atual.
+- Bidirecional: passo 3 mostra seta `LLM → Agente`; passo 6 mostra `Agente → LLM`. A seta sempre aponta no sentido REAL do fluxo.
+- Zona "🧠 RAG" visualmente delimitada (retrieve_kb + ChromaDB envolvidos por um retângulo tracejado), pra alunos perguntarem "onde está o RAG?" e a UI responder visualmente.
+
+**3. Eventos refatorados (8 em vez de 5, narrados em gerúndio)**
+- Antes: `llm_call_start`, `llm_text`, `tool_call_requested`, `tool_result`, `final_answer` (perspectiva ambígua).
+- Agora: `agent_received_user_input`, `agent_sending_to_llm`, `agent_received_tool_request_from_llm`, `agent_executing_tool`, `agent_received_tool_result`, `agent_sending_tool_result_to_llm`, `agent_received_text_from_llm`, `agent_delivering_answer_to_user`.
+- Agente sempre como sujeito ativo — reforça didaticamente "o que ESTAMOS construindo" (o agente), em vez de "qual subsistema está ativo".
+
+**4. Provider Anthropic API (`anthropic_api`)**
+- Antes: agente só rodava com Claude Code CLI local (`claude_code` provider) ou Gemini (`gemini` provider).
+- Agora: terceira opção via API direta da Anthropic, sem dependência de binário CLI. **Único provider viável pra deploy cloud** (Render/Vercel não têm `claude.exe` instalado).
+
+**5. Polishes de UX (acumulados)**
+- Modo Debug ON por default.
+- Logo da "Porto Inseguro" (barco fictício) no lugar do emoji 🚗.
+- Fonte Inter no corpo + JetBrains Mono no código.
+- Foco automático no input ao carregar a página.
+- Auto-scroll + auto-collapse dos cards de passo na timeline.
+- Ratio chat / debug invertido (2/5 chat, 3/5 debug) — mais espaço pra parte didática.
+
+### O que ainda falta até 29/05
+
+Mesmas pendências do plano original, agora chamadas de **"Fase 4"**:
+- Deploy: backend → Render (free tier), frontend → Vercel (free tier).
+- QA conversacional com 10-20 cenários (incluindo jailbreak attempts).
+- Slides de apresentação (~10-12).
+- README.md público executável por terceiro.
+- Receber tarifador real do João + Adriele (a qualquer momento — interface estável já implementada).
+
+**O risco "Streamlit Cloud cai no dia" é mitigado**: agora temos 2 caminhos de deploy (Streamlit Community Cloud para a versão simples, Vercel+Render para a versão Next.js). Se um cair, o outro funciona.
+
+---
+
+## Addendum 2026-05-17 (tarde) — Frente A: Calibração do RAG
+
+Sessão investigativa pós-Sprint 3, antes de partir pro deploy. **Detalhes completos em [RELATORIO.md](../RELATORIO.md) sessão "Frente A".**
+
+### Por que essa frente existiu
+
+Olhando o chatbot funcionar, observamos um caso de uso onde a LLM **iterava 4 vezes** o `retrieve_kb` antes de responder "o que é prêmio?". Cada iteração custava tokens, latência, e parecia ineficiente. Sem visibilidade do que estava acontecendo internamente, era impossível diagnosticar.
+
+### O que foi feito
+
+**1. Camada de logging interno** (`INSURMIND_LOG_LEVEL` env var) — instrumentação no `rag.py`, `tools.py` e `anthropic_api.py` pra registrar tudo que o agente faz: queries enviadas ao ChromaDB, distâncias dos chunks retornados, decisões de fallback, rounds da LLM, tokens consumidos. Vai pro terminal do uvicorn, **não pro usuário final**.
+
+**2. Descobertas críticas via logs:**
+- O threshold de fallback (1.30) era tão lenient que **nunca disparava** — fallback SUSEP/FENACOR era código morto.
+- A KB da Porto Inseguro tinha o **conceito** de prêmio mas não a **definição explícita** — chunks falavam sobre "como pagar prêmio", "vencimento" etc., mas não diziam "prêmio é X".
+- A LLM **narrava intenções** ("vou buscar no SUSEP") que **não se realizavam** no sistema — gap entre o modelo mental dela e o comportamento real do código.
+
+**3. Novo arquivo na KB**: [`data/kb/10-porto-glossario.md`](../data/kb/10-porto-glossario.md) — glossário próprio com 12 termos centrais (prêmio, sinistro, franquia, cobertura, apólice, segurado, indenização, carência, vigência, bonus, endosso, aviso de sinistro, DPVAT) escritos no estilo Porto Inseguro com exemplos práticos.
+
+**4. Calibração empírica do threshold**: baixado de 1.30 → **0.40** com base em distâncias reais observadas. Agora o fallback dispara só pra queries genuinamente off-domain.
+
+### Resultados quantitativos
+
+| Métrica | Antes | Depois |
+|---|---|---|
+| Rounds da LLM pra "o que é prêmio?" | 5 | **1** |
+| Tokens de input acumulados | ~60.000 | **~5.000** |
+| Custo estimado por turno (Sonnet 4.5) | ~$0.20 | **~$0.02** |
+| Latência | ~12-15s | **~3-4s** |
+| Chunks na KB | 298 | **312** |
+
+**Redução de ~90% no custo, 4× menos latência** sem perder qualidade — pelo contrário, agora a resposta vem mais direta e com fonte mais limpa.
+
+### Por que isso vale destacar nos slides
+
+A descoberta + correção desse comportamento é **estudo de caso pedagógico forte** sobre desenvolvimento com LLMs:
+
+1. **A narração da LLM mente sem querer** — ela diz "vou fazer X" mas a infra faz Y. Log é a única fonte de verdade.
+2. **Similaridade vetorial ≠ utilidade pra resposta** — chunk com distância 0.20 pode não responder à pergunta. Resolver isso requer enriquecer a KB, não calibrar threshold.
+3. **Calibração empírica via instrumentação >>> calibração por palpite** — o valor 1.30 era placeholder que ninguém testou. Bastou um dia de logs reais pra descobrir que 0.40 é o número certo.
+
+São princípios diretamente aplicáveis a qualquer projeto de agente com RAG no mundo real.

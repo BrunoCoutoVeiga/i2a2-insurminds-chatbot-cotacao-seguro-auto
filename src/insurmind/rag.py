@@ -18,6 +18,7 @@ Uso CLI (smoke test):
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,15 +31,29 @@ COLLECTION_NAME = 'insurmind_kb'
 EMBED_MODEL_NAME = 'intfloat/multilingual-e5-base'
 
 # Limiar empírico (distância L2 em e5-base normalizado). Acima disso = fraco.
-# Calibrável conforme observação no smoke test.
-SCORE_THRESHOLD = 1.3
+#
+# CALIBRAÇÃO 2026-05-17: baixado de 1.30 → 0.40 com base em observação real
+# (logs reportaram que 1.30 era tão lenient que o fallback nunca disparava,
+# mesmo pra queries off-domain). Espaço vetorial do e5-base nesse domínio
+# fica comprimido em 0.2-0.4, então valores acima disso são raros.
+#
+# Distâncias observadas como referência:
+#   - "o que é prêmio" (Porto-perfect):    0.204  → sem fallback (bom)
+#   - "drone agrícola" (off-product):      0.325  → sem fallback (limite)
+#   - "brigadeiro receita" (off-domain):   0.387  → sem fallback (limite)
+#
+# Threshold 0.40 deixa Porto ganhar quase sempre (objetivo do tieirizado);
+# fallback dispara só pra queries que escapam totalmente do produto.
+SCORE_THRESHOLD = 0.40
 TOP_K = 5
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class Chunk:
     text: str
-    source: str           # porto-cg / porto-faq / susep-cartilha / susep-glossario / fenacor
+    source: str           # porto-cg / porto-faq / porto-glossario / susep-cartilha / susep-glossario / fenacor
     file: str
     section: str
     tier: str             # primary | fallback
@@ -119,20 +134,68 @@ async def retrieve_kb(
       também em `tier=fallback` e mescla.
     - Retorna até `k` chunks ordenados por menor distância (mais similar primeiro).
     """
+    logger.info("RAG query recebida: %r (k=%d, threshold=%.2f)", query, k, score_threshold)
+
     # asyncio.to_thread porque embedding e Chroma são CPU-bound síncronos
     query_emb = await asyncio.to_thread(_embed_query, query)
+    logger.debug("Embedding computado: %d dims", len(query_emb))
+
+    logger.info("ChromaDB query #1: tier=primary (Porto CG + FAQ), k=%d", k)
     primary = await asyncio.to_thread(_query_chunks, query_emb, k, 'primary')
+    if primary:
+        logger.info(
+            "  → %d chunks. Distâncias: %s",
+            len(primary),
+            ", ".join(f"{c.distance:.3f}" for c in primary),
+        )
+    else:
+        logger.warning("  → 0 chunks no tier primary (KB pode estar vazia/quebrada)")
 
     # Se Porto não tem nada bom, busca fallback também
     has_good_primary = bool(primary) and primary[0].distance <= score_threshold
     if not has_good_primary:
+        if primary:
+            logger.info(
+                "DECISÃO: primary INSUFICIENTE (top distance %.3f > threshold %.2f) — "
+                "consultando fallback SUSEP/FENACOR",
+                primary[0].distance, score_threshold,
+            )
+        else:
+            logger.info("DECISÃO: primary vazio — consultando fallback SUSEP/FENACOR")
+
+        logger.info("ChromaDB query #2: tier=fallback (SUSEP + FENACOR), k=%d", k)
         fallback = await asyncio.to_thread(_query_chunks, query_emb, k, 'fallback')
+        if fallback:
+            logger.info(
+                "  → %d chunks. Distâncias: %s",
+                len(fallback),
+                ", ".join(f"{c.distance:.3f}" for c in fallback),
+            )
+        else:
+            logger.warning("  → 0 chunks no tier fallback")
+
         # Mescla primary + fallback, dedup por id implícito (não pega o mesmo doc)
         merged = primary + fallback
         merged.sort(key=lambda c: c.distance)
-        return merged[:k]
+        result = merged[:k]
+        logger.info(
+            "Retornando %d chunks (mesclados primary+fallback): %s",
+            len(result),
+            ", ".join(f"{c.source}@{c.distance:.3f}" for c in result),
+        )
+        return result
 
-    return primary[:k]
+    logger.info(
+        "DECISÃO: primary SATISFAZ (top distance %.3f ≤ threshold %.2f) — sem fallback",
+        primary[0].distance, score_threshold,
+    )
+    result = primary[:k]
+    logger.info(
+        "Retornando %d chunks (só primary): %s",
+        len(result),
+        ", ".join(f"{c.source}@{c.distance:.3f}" for c in result),
+    )
+    return result
 
 
 # =============================================================================

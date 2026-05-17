@@ -22,12 +22,12 @@ export function DebugPanel({ events, stepIndex, onNext, onSkipToEnd }: Props) {
     <div className="flex h-full flex-col bg-zinc-50">
       <header className="border-b border-zinc-200 bg-white px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="text-xl">🪲</span>
-          <h2 className="text-base font-semibold text-zinc-800">
+          <span className="text-2xl">🪲</span>
+          <h2 className="text-xl font-semibold tracking-tight text-zinc-800">
             Painel Debug — passo a passo
           </h2>
         </div>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-sm leading-snug text-zinc-500">
           Diagrama animado em cima mostra qual componente está ativo no passo
           atual; timeline embaixo tem o detalhe técnico de cada evento.
         </p>
@@ -61,27 +61,30 @@ export function DebugPanel({ events, stepIndex, onNext, onSkipToEnd }: Props) {
       </div>
 
       {events.length > 0 && (
-        <footer className="border-t border-zinc-200 bg-white px-3 py-3 space-y-2">
+        <footer className="border-t border-zinc-200 bg-white px-3 py-2">
           {nextEvent ? (
-            <>
+            // Dois botões centralizados, MESMA largura fixa, mais quadrados
+            // (texto wrappa em 2 linhas). Não esticam pra ocupar o painel.
+            <div className="flex justify-center gap-2">
               <Button
                 onClick={onNext}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                className="h-auto w-60 whitespace-normal py-2.5 text-sm leading-tight bg-blue-600 hover:bg-blue-700 text-white"
               >
-                ▶ Passo {stepIndex + 2}: {eventLabels[nextEvent.type].short}
+                ▶ Passo {stepIndex + 2}:{" "}
+                {eventLabels[nextEvent.type]?.short ?? nextEvent.type}
               </Button>
               {remaining > 1 && (
                 <Button
                   onClick={onSkipToEnd}
                   variant="outline"
-                  className="w-full"
+                  className="h-auto w-60 whitespace-normal py-2.5 text-sm leading-tight"
                 >
                   ⏩ Rodar até o final ({remaining} passos restantes)
                 </Button>
               )}
-            </>
+            </div>
           ) : (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-sm text-emerald-800">
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-center text-sm text-emerald-800">
               ✅ Conversa nesse turno concluída — pronto pra próxima pergunta.
             </div>
           )}

@@ -17,6 +17,7 @@ Uso (dev):
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from typing import AsyncIterator, Literal
@@ -30,7 +31,10 @@ from sse_starlette.sse import EventSourceResponse
 from insurmind.agent import chat_stream_events
 from insurmind.tools import ALL_TOOLS
 
-load_dotenv()
+# override=True faz o .env ganhar sobre variáveis já existentes no shell.
+# Sem isso, se o usuário fez `$env:INSURMIND_LLM=...` numa sessão anterior,
+# essa var persiste e sobrescreve silenciosamente o .env (debug confuso).
+load_dotenv(override=True)
 
 # Encoding fix Windows console
 if sys.platform == "win32":
@@ -38,6 +42,27 @@ if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
     except Exception:
         pass
+
+# =============================================================================
+# Logging — saída detalhada do que o agente, RAG e providers estão fazendo.
+# Vai pro stdout do uvicorn (terminal). Nível controlável via INSURMIND_LOG_LEVEL
+# no .env (DEBUG | INFO | WARNING). Default INFO.
+# =============================================================================
+
+_LOG_LEVEL = os.environ.get("INSURMIND_LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=_LOG_LEVEL,
+    format="[%(asctime)s] %(levelname)-5s %(name)s — %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stdout,
+    force=True,  # sobrescreve config padrão do uvicorn pra ter nosso formato
+)
+# Reduz ruído de libs ruidosas — só queremos INFO+ delas.
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("chromadb").setLevel(logging.WARNING)
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 
 
 # =============================================================================
@@ -55,11 +80,17 @@ app = FastAPI(
 )
 
 # Dev: Next em localhost:3000 chama backend em localhost:8000
-# Prod: ajustar conforme deploy (Vercel front + Render back)
-ALLOWED_ORIGINS = os.environ.get(
-    "INSURMIND_CORS_ORIGINS",
-    "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000",
-).split(",")
+# Prod: env INSURMIND_CORS_ORIGINS no Render aponta pra URL do Vercel.
+# Formato aceito: "https://app.vercel.app" ou "https://a.vercel.app,https://b.vercel.app"
+# .strip() pra tolerar espaços ao redor das vírgulas (erro humano comum em dashboards).
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "INSURMIND_CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000",
+    ).split(",")
+    if origin.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,

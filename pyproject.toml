@@ -5,6 +5,7 @@ description = "Chatbot de cotação de seguros de automóveis — Atividade Obri
 requires-python = ">=3.10"
 dependencies = [
     "claude-agent-sdk>=0.1.0,<0.2.0",
+    "anthropic>=0.40",     # provider anthropic_api (loop manual, sem CLI — pré-requisito de deploy cloud)
     "chromadb>=0.5",
     "sentence-transformers>=3.0",
     "streamlit>=1.40",

@@ -1,18 +1,23 @@
 """Eventos estruturados emitidos pelo agente — base do Modo Debug da UI.
 
-O agente envelopa os `Block` brutos do provider de LLM em `AgentEvent`s ricos
-(com tipo, payload estruturado e timestamp) que a UI debug consome pra
-mostrar passo a passo o que está acontecendo por baixo dos panos.
+Todos os eventos são narrados na **perspectiva do Agente** (o ator central do
+sistema), em gerúndio, didáticos. O Agente é o componente que estamos
+desenvolvendo; LLM e tools são recursos que ele orquestra.
 
-Tipos de eventos (na ordem típica de uma conversa):
+Sequência típica pra uma pergunta de FAQ que dispara `retrieve_kb`:
 
-1. `llm_call_start`      — agente preparou a chamada e está enviando à LLM
-2. `llm_text`            — LLM emitiu pedaço de texto (resposta direta)
-3. `tool_call_requested` — LLM pediu execução de uma tool
-4. `tool_result`         — handler da tool retornou (só providers manuais; Claude SDK não emite)
-5. `final_answer`        — fim do ciclo; cadeia completa pronta
+  1. agent_received_user_input            — recebeu a pergunta
+  2. agent_sending_to_llm                  — vai enviar contexto à LLM
+  3. agent_received_tool_request_from_llm  — LLM pediu execução de tool
+  4. agent_executing_tool                  — está rodando a tool
+  5. agent_received_tool_result            — tool terminou
+  6. agent_sending_tool_result_to_llm      — devolve resultado à LLM
+  7. agent_received_text_from_llm          — LLM gerou texto final
+  8. agent_delivering_answer_to_user       — apresenta no chat
 
-Os botões do Modo Debug derivam-se desses tipos (`docs/visao-geral-do-chatbot.md` §7).
+Para pergunta off-domain (LLM responde direto sem chamar tool), só os passos
+1, 2, 7, 8 ocorrem. Para cotação multi-turno, a sequência se repete a cada
+turno de coleta de dados.
 """
 
 from __future__ import annotations
@@ -22,11 +27,15 @@ from datetime import datetime
 from typing import Any, Literal
 
 EventType = Literal[
-    "llm_call_start",
-    "llm_text",
-    "tool_call_requested",
-    "tool_result",
-    "final_answer",
+    "agent_received_user_input",
+    "agent_sending_to_llm",
+    "agent_received_tool_request_from_llm",
+    "agent_executing_tool",
+    "agent_received_tool_result",
+    "agent_sending_tool_result_to_llm",
+    "agent_received_text_from_llm",
+    "agent_delivering_answer_to_user",
+    "error",
 ]
 
 
@@ -37,19 +46,28 @@ class AgentEvent:
     timestamp: datetime = field(default_factory=datetime.now)
 
     def short_description(self) -> str:
-        """Texto curto pra exibir como label no botão 'Próximo passo' da UI debug."""
+        """Texto curto pro botão 'Próximo passo' da UI. Sempre em gerúndio,
+        agente como sujeito ativo."""
         match self.type:
-            case "llm_call_start":
-                return "Enviar pergunta à LLM (com system prompt e tools)"
-            case "llm_text":
-                return "Receber texto da LLM"
-            case "tool_call_requested":
+            case "agent_received_user_input":
+                return "Agente recebendo pergunta do usuário"
+            case "agent_sending_to_llm":
+                return "Agente enviando contexto à LLM"
+            case "agent_received_tool_request_from_llm":
+                return "Agente recebeu pedido de tool da LLM"
+            case "agent_executing_tool":
                 name = self.payload.get("name", "?")
-                return f"Executar a tool `{name}` pedida pela LLM"
-            case "tool_result":
+                return f"Agente executando a tool `{name}`"
+            case "agent_received_tool_result":
                 name = self.payload.get("name", "?")
-                return f"Devolver resultado da tool `{name}` à LLM"
-            case "final_answer":
-                return "Mostrar resposta final ao usuário"
+                return f"Agente recebeu resultado da tool `{name}`"
+            case "agent_sending_tool_result_to_llm":
+                return "Agente devolvendo resultado à LLM"
+            case "agent_received_text_from_llm":
+                return "Agente recebeu texto da LLM"
+            case "agent_delivering_answer_to_user":
+                return "Agente apresentando resposta ao usuário"
+            case "error":
+                return "Erro durante a execução"
             case _:
                 return self.type

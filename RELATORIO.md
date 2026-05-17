@@ -863,3 +863,309 @@ Modo Debug com `claude_code` provider emite apenas 3 tipos de evento (`llm_call_
 - **Slides de apresentação** (~10-12 slides destacando: 3-fluxos, RAG tieirizado, Modo Debug como diferencial técnico, anonimização) — Sprint 3
 - **Receber tarifador real** do João Carlos + Adriele e substituir miolo de `compute_quote_mock` — a qualquer momento (interface estável)
 - **QA conversacional** (15-20 cenários cobrindo casos felizes, edge cases, jailbreak attempts) — Sprint 3
+
+---
+
+### 2026-05-17 — Sprint 3 implementação: UI Next.js + Modo Debug v2 com diagrama animado + provider Anthropic API
+
+Sprint 3 originalmente prevista pra 28-29/05 — **antecipada em 11 dias** e executada na mesma janela das Sprints 1 e 2 (sequência maratona 2026-05-16/17). 6 frentes entregues em uma sessão:
+
+#### Frente 1 — Backend FastAPI + Server-Sent Events (`src/insurmind/api.py`)
+
+Para a UI Next.js conseguir consumir o mesmo `chat_stream_events` que a Streamlit consome, criamos um backend HTTP que serializa cada `AgentEvent` como evento SSE.
+
+- **Endpoints:**
+  - `GET /api/health` — sanity check (provider ativo + contagem de tools).
+  - `GET /api/info` — metadata (provider, tools, CORS origins) pra UI mostrar no header.
+  - `POST /api/chat` — recebe `{messages: [...]}` e devolve SSE stream.
+- **Stack:** FastAPI + `sse-starlette`. CORS aberto pra `localhost:3000/3001` (dev), configurável via `INSURMIND_CORS_ORIGINS` em prod.
+- **Formato SSE:** cada evento é uma linha `event: <type>\ndata: <json>\n\n`. O `<type>` casa com `AgentEvent.type`; o `<json>` carrega `{type, payload, timestamp}`.
+
+**Decisão técnica — POST + SSE em vez de WebSocket ou GET + EventSource:**
+
+| Opção | Tradeoffs | Escolha |
+|---|---|---|
+| GET + `EventSource` (browser native) | Não permite body — teria que serializar histórico na URL (limites + ugly) | ❌ |
+| WebSocket | Overkill pro caso (one-shot turn-based), exige protocolo custom | ❌ |
+| POST + SSE custom parser | Flexível, body limpo, SSE no return é nativo no `sse-starlette` | ✅ |
+
+#### Frente 2 — Scaffold Next.js 16 + chat funcional + painel debug v1 (`web/`)
+
+UI moderna paralela à Streamlit. Não substitui — Streamlit fica como demo standalone integrada ao pacote Python; Next.js é o caminho pra deploy cloud e diferencial visual.
+
+- **Stack:** Next.js 16.2.6 (Turbopack) + React 19.2 + TypeScript 5 + Tailwind CSS v4 + shadcn/ui (componentes pre-built: Button, Card, Input, Switch, Badge, ScrollArea).
+- **Estrutura:** App Router (`app/page.tsx` é client component porque usa state + SSE). Componentes em `components/chat/` (ChatMessages, ChatInput) e `components/debug/` (DebugPanel, EventCard).
+- **Parser SSE custom (`web/lib/api.ts`):** `fetch` POST + `ReadableStream` + decoder UTF-8 + regex split. **Bug encontrado e corrigido**: `sse-starlette` separa eventos com `\r\n\r\n`, não `\n\n` como esperávamos. Sem o fix, todos os eventos vinham concatenados num único `data: ...` e quebravam o `JSON.parse`. Regex final: `/\r?\n\r?\n/`.
+- **Painel debug v1:** timeline vertical com cards expansíveis por evento, JSON cru escondido em "ver formato técnico", botões "▶ Próximo passo" + "⏩ Rodar até o final".
+
+**Bug curioso:** `Write` falhou silenciosamente ao tentar criar `app/page.tsx` no scaffold inicial — ficou o template default do `create-next-app` mesmo após o commit. Detectado quando F5 mostrou "Welcome to Next.js" em vez do chat. Fix: `Read` antes do `Write`, depois commit. Lição: a falha silenciosa da Write tool é caso patológico; vale conferir visualmente após scaffold.
+
+#### Frente 3 — Diagrama animado React Flow (`web/components/debug/AgentDiagram.tsx`)
+
+A parte "mais legal" do Modo Debug. Grafo visual mostrando User → Agent → LLM/Tools/ChromaDB, com nodes que acendem e edges que animam conforme o passo atual.
+
+- **Stack:** `@xyflow/react` v12 (rebranding do React Flow) + Framer Motion (não usado ainda — animação ficou só com CSS transitions).
+- **Custom nodes:** o default node do React Flow só tem 1 source handle + 1 target handle. Como o Agent precisa conectar bidirecionalmente em 3 lados (User à esquerda, LLM em cima, Tools à direita), e tools precisam conectar bidirecionalmente também (Agent à esquerda + ChromaDB à direita no caso do `retrieve_kb`), criamos:
+  - `AgentNode.tsx` — 6 handles nomeados (`from-user`, `to-user`, `to-llm`, `from-llm`, `to-tools`, `from-tools`).
+  - `ToolNode.tsx` — 4 handles (`from-agent`, `to-agent`, `to-kb`, `from-kb`).
+  - `RagBadgeNode.tsx` — node decorativo, sem handles, renderiza retângulo tracejado "🧠 RAG" envolvendo `retrieve_kb` + `ChromaDB`.
+- **Edges bidirecionais:** cada par conectado tem 2 edges (forward + reverse). Forward sempre desenhada (faded cinza), reverse só visível quando o passo atual aciona aquela direção. Resultado: a seta sempre aponta no sentido REAL do fluxo daquele passo. Ex.: passo 3 (`agent_received_tool_request_from_llm`) acende a edge `LLM → Agent`; passo 6 (`agent_sending_tool_result_to_llm`) acende `Agent → LLM`.
+
+#### Frente 4 — Refator agent-centric dos eventos (`events.py`, `agent.py`, `web/lib/types.ts`, `web/components/debug/EventCard.tsx`)
+
+Original tinha 5 EventTypes (`llm_call_start`, `llm_text`, `tool_call_requested`, `tool_result`, `final_answer`) — perspectiva ambígua (às vezes LLM, às vezes agente, às vezes resultado). Refator pra **8 eventos com agente sempre como sujeito, narrados em gerúndio**:
+
+| # | EventType | Narrativa |
+|---|---|---|
+| 1 | `agent_received_user_input` | Agente recebendo pergunta do usuário |
+| 2 | `agent_sending_to_llm` | Agente enviando contexto à LLM |
+| 3 | `agent_received_tool_request_from_llm` | Agente recebeu pedido de tool |
+| 4 | `agent_executing_tool` | Agente executando a tool |
+| 5 | `agent_received_tool_result` | Agente recebeu resultado da tool |
+| 6 | `agent_sending_tool_result_to_llm` | Agente devolvendo resultado à LLM |
+| 7 | `agent_received_text_from_llm` | Agente recebeu texto da LLM |
+| 8 | `agent_delivering_answer_to_user` | Agente apresentando resposta ao usuário |
+
+**Justificativa pedagógica:** o "ator central" do projeto é o agente — ele é o componente que **estamos construindo**. LLM e tools são recursos que ele orquestra. Eventos narrados na perspectiva do agente (em gerúndio, sujeito ativo) reforçam essa narrativa. Alunos do curso entendem "o que o agente está fazendo agora" em vez de "qual subsistema está ativo".
+
+Limitação herdada: provider `claude_code` faz autodispatch e pula passos 5+6 (`agent_received_tool_result` + `agent_sending_tool_result_to_llm`). Provider `anthropic_api` ou `gemini` emitem os 8 passos completos.
+
+#### Frente 5 — Provider Anthropic API (`src/insurmind/llm/anthropic_api.py`)
+
+Stub virou implementação real (~140 linhas). Mesma estrutura do `gemini.py` (loop manual de tool calls), traduzindo `Tool` agnóstica → `tools=[{name, description, input_schema}]` da Anthropic API.
+
+**Por que precisou existir:**
+- `claude_code` provider spawna o binário `claude.exe` como subprocesso. Funciona em dev (com Claude Code instalado e logado), **não funciona em deploy** (Render/Vercel não têm o binário).
+- Erro encontrado: `CLIConnectionError: Failed to start Claude Code` quando uvicorn rodava em ambiente sem `C:\Users\Bruno\.local\bin\` no PATH. Confirma que mesmo localmente o provider é frágil.
+- Adicionar `ANTHROPIC_API_KEY` no `.env` **não resolve** o `claude_code` — ele segue tentando spawnar a CLI. Comentário enganoso no `.env.example` corrigido.
+
+**Decisão de default:**
+- CLI Python (`python -m insurmind.agent`): default `claude_code` (mais barato durante dev, usa sessão local logada).
+- Web (FastAPI consumindo `INSURMIND_LLM`): default `anthropic_api` em prod (funciona em cloud sem CLI).
+
+Validado via CLI: `INSURMIND_LLM=anthropic_api python -m insurmind.agent "O que é franquia?"` → resposta correta com `retrieve_kb` chamada e fonte citada.
+
+#### Frente 6 — UX polishes do Modo Debug
+
+Várias iterações sob feedback direto do usuário:
+
+- **Auto-scroll com `requestAnimationFrame`** — quando o passo atual muda, o card novo entra no campo de visão alinhado pelo TOPO (`block: "start"`). `rAF` garante que o scroll roda APÓS o layout reflowar com a expansão do card. Sem isso, posicionava com altura antiga (colapsada) e o título saía da viewport.
+- **Auto-collapse de passos anteriores** — `useEffect` sincroniza `expanded` com `isCurrent`. Avançar pro passo seguinte fecha o anterior automaticamente.
+- **Header slim + reorganização** — `Limpar conversa` agrupado com title à esquerda; Modo Debug toggle saiu do header e virou pill compacto no `ChatInput`. Painel debug agora estende mais pra cima.
+- **Ratio chat/debug invertido** — antes 3/5 chat / 2/5 debug; agora 2/5 chat / 3/5 debug (a parte densa é a timeline).
+- **Botões de navegação** — duas iterações até chegar no formato final: lado-a-lado, largura fixa igual (`w-60`), `whitespace-normal` pra wrappar texto em 2 linhas, `text-sm`.
+- **Fonte** — Geist (default do scaffold) → **Inter** (sans) + **JetBrains Mono** (mono). Base do body de 14px → 15px. Header do painel debug de `text-base` → `text-xl`.
+- **Modo Debug ON por default** — feature didática central, mostra desde o primeiro acesso.
+- **Logo da Porto Inseguro** — emoji 🚗 substituído por `web/public/porto-inseguro-logo.jpg` (36x36 com cantos arredondados, otimizado via `next/image`).
+- **RAG zone visual** — `RagBadgeNode` decorativo envolvendo `retrieve_kb` + `ChromaDB` com etiqueta "🧠 RAG (Retrieval Augmented Generation)". Acende em âmbar nos passos 4 (`agent_executing_tool`) e 5 (`agent_received_tool_result`) quando a tool é `retrieve_kb`. Apaga no passo 6 (ação se move pra fora da zona). Objetivo pedagógico: alunos perguntam "onde está o RAG" — agora visualmente delimitado.
+- **Foco automático no input** — `useRef + useEffect` no `ChatInput`. Cursor já no campo no carregamento E quando o input destrava (após resposta). Fluxo conversacional sem cliques.
+- **Fallback defensivo no `EventCard`** — se backend emitir tipo desconhecido (ex.: backend rodando versão antiga após edit em `events.py`), card mostra o tipo cru em vez de quebrar a UI com `Cannot read properties of undefined`.
+
+#### Diagrama do estado final da UI Next.js (Modo Debug ligado)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ [Logo]  InsurMind — Porto Inseguro  Seguro auto · I2A2  [Limpar conv.] │ ← header slim
+├──────────────────────────────────┬──────────────────────────────────────┤
+│  [chat messages]                  │  🪲 Painel Debug — passo a passo    │
+│                                   │  ┌──────────────────────────────┐   │
+│                                   │  │   ┌─LLM─┐                    │   │
+│                                   │  │   │     ↓                    │   │
+│                                   │  │ User → AGENT → [retrieve_kb] │   │
+│                                   │  │           ╲ → [compute]      │   │
+│                                   │  │           ╲ → [escalar]      │   │
+│                                   │  │       🧠 RAG (badge)          │   │
+│                                   │  └──────────────────────────────┘   │
+│                                   │  [timeline de cards expansíveis]    │
+│                                   │  ▶ Passo N+1: ...   ⏩ Rodar até fim │
+├──────────────────────────────────┴──────────────────────────────────────┤
+│ [🪲 Debug ON] [pergunte sobre seu seguro auto...] [Enviar]               │ ← ChatInput
+├──────────────────────────────────────────────────────────────────────────┤
+│ ⚠️ Valores simulados para fins acadêmicos · Porto Inseguro é fictícia    │ ← footer
+└──────────────────────────────────────────────────────────────────────────┘
+                       ↑ chat 2/5            ↑ debug 3/5
+```
+
+#### Resumo de arquivos novos/alterados (Sprint 3)
+
+| Arquivo | O que mudou |
+|---|---|
+| `src/insurmind/api.py` | **Novo** — FastAPI + SSE |
+| `src/insurmind/events.py` | Reescrito — 8 EventTypes agent-centric em gerúndio |
+| `src/insurmind/agent.py` | `chat_stream_events` refatorado pra emitir 8 eventos |
+| `src/insurmind/llm/anthropic_api.py` | Stub → implementação real (loop manual) |
+| `.env.example` | Comentários atualizados, ordem dos providers reorganizada |
+| `pyproject.toml` | +`anthropic`, +`fastapi`, +`uvicorn[standard]`, +`sse-starlette` |
+| `web/` | **Pasta nova inteira** — Next.js 16 scaffold + chat + debug panel + diagrama |
+| `web/public/porto-inseguro-logo.jpg` | Logo fictícia (criada externamente, copiada) |
+
+#### O que falta até a entrega (29/05) — atualizado
+
+- ~~Modo Debug step-by-step~~ ✅
+- ~~UI Next.js + diagrama animado~~ ✅
+- ~~Provider Anthropic API~~ ✅
+- **Deploy** — backend Render + frontend Vercel (Fase 4)
+- **QA conversacional** (15-20 cenários) — Fase 4
+- **Slides** (~10-12) — Fase 4
+- **README.md público** executável por terceiro — Fase 4
+- **Receber tarifador real** do João + Adriele — a qualquer momento (interface estável)
+
+---
+
+### 2026-05-17 (tarde) — Frente A: Calibração do RAG via instrumentação
+
+Sessão investigativa pós-entrega da Sprint 3. Objetivo: validar empiricamente o comportamento do RAG tieirizado e calibrar parâmetros que estavam no chute. Resultado: descoberta de problemas reais (threshold dormente, fallback nunca disparado, custo inflado) e correções verificadas.
+
+#### Frente A.0 — Instrumentação (pré-requisito de tudo)
+
+Antes de mexer em qualquer coisa, adicionada **camada de logging estruturado** pra observar o comportamento real do sistema. Sem isso, qualquer "calibração" seria adivinhação.
+
+**Configuração centralizada em [src/insurmind/api.py](src/insurmind/api.py):**
+
+```python
+_LOG_LEVEL = os.environ.get("INSURMIND_LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=_LOG_LEVEL,
+    format="[%(asctime)s] %(levelname)-5s %(name)s — %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stdout,
+    force=True,
+)
+# Silenciar libs ruidosas (uvicorn.access, httpx, chromadb, sentence_transformers)
+```
+
+**Loggers granulares adicionados em:**
+- `insurmind.rag` — queries recebidas, dimensões do embedding, queries ao ChromaDB por tier, distâncias dos chunks, decisão de fallback com justificativa
+- `insurmind.tools` — invocação de cada tool com args, tamanho do payload de retorno, warnings em casos vazios
+- `insurmind.llm.anthropic_api` — início do turno, rounds da LLM (com stop_reason, blocks emitidos, tokens consumidos), encerramento
+
+**Exemplo de saída pra uma pergunta com RAG:**
+
+```
+[12:55:01] INFO  insurmind.llm.anthropic_api — PROVIDER anthropic_api: iniciando turno (model=claude-sonnet-4-5, 1 msgs hist, 3 tools)
+[12:55:01] INFO  insurmind.llm.anthropic_api — LLM round 1: chamando Anthropic API...
+[12:55:03] INFO  insurmind.llm.anthropic_api —   → resposta da LLM: stop_reason=tool_use, blocks=[tool_use(retrieve_kb)], tokens=in=4280, out=69
+[12:55:03] INFO  insurmind.tools — TOOL retrieve_kb invocada pela LLM com consulta='o que é prêmio em seguro auto Porto Inseguro'
+[12:55:03] INFO  insurmind.rag — RAG query recebida: 'o que é prêmio em seguro auto Porto Inseguro' (k=5, threshold=1.30)
+[12:55:03] INFO  insurmind.rag — ChromaDB query #1: tier=primary (Porto CG + FAQ), k=5
+[12:55:04] INFO  insurmind.rag —   → 5 chunks. Distâncias: 0.264, 0.267, 0.270, 0.281, 0.281
+[12:55:04] INFO  insurmind.rag — DECISÃO: primary SATISFAZ (top distance 0.264 ≤ threshold 1.30) — sem fallback
+[12:55:04] INFO  insurmind.rag — Retornando 5 chunks (só primary): porto-faq@0.264, porto-faq@0.267, porto-faq@0.270, porto-faq@0.281, porto-faq@0.281
+[12:55:04] INFO  insurmind.tools — TOOL retrieve_kb devolvendo: 5 chunks, 7660 chars de texto pra LLM
+```
+
+**Decisão de design — log no stdout, não em arquivo:**
+
+| Opção | Tradeoff | Escolha |
+|---|---|---|
+| Log em arquivo (`logs/insurmind.log`) | Persistência mas precisa rotação, gerenciamento | ❌ |
+| Log no stdout (uvicorn captura) | Aparece no terminal de quem rodou; some quando fecha | ✅ Pra dev/demo |
+| Tracing distribuído (OpenTelemetry) | Padrão de produção, mas overkill pra projeto acadêmico | ❌ |
+
+Pra deploy futuro (Render), o stdout vira automaticamente o log do container — Render expõe via web UI. Continua coerente sem mudança.
+
+#### Frente A.1 — Descoberta crítica via logging: threshold dormente
+
+**Pergunta de teste**: "o que é prêmio em seguro auto?" — uma das 10 FAQs do DoD.
+
+**Comportamento observado nos logs**: a LLM fez **5 rounds** de chamadas à API Anthropic, **4 chamadas ao retrieve_kb**, com queries cada vez mais reformuladas, até finalmente responder. Custo: ~60K tokens de input acumulados (~$0.20). Distâncias top dos 4 retrieves: 0.264, 0.302, 0.320, 0.274.
+
+**3 descobertas que o log revelou:**
+
+1. **O threshold de fallback estava dormente.** Valor original em [rag.py](src/insurmind/rag.py): `SCORE_THRESHOLD = 1.30`. Mas e5-base nesse domínio (textos de seguros em PT-BR) comprime distâncias em **0.2-0.4** mesmo pra queries totalmente off-domain ("brigadeiro receita doce" → 0.387). Nenhuma query do mundo real ficaria acima de 1.30. **O fallback SUSEP/FENACOR nunca foi acionado em produção** — só existia como código morto.
+
+2. **A narração da LLM era forward-looking, não factual.** Em interações anteriores a LLM havia dito "deixe-me buscar no glossário oficial da SUSEP/FENACOR". Os logs revelaram que **isso nunca aconteceu** — a LLM colocou "SUSEP FENACOR" como palavras-chave na query esperando que isso direcionasse a busca, mas o `rag.py` ignora conteúdo da query pra decidir tier (usa só score). Resultado: resposta final saiu de chunks Porto, mas a LLM "narrou" como se tivesse consultado SUSEP/FENACOR. Não foi mentira deliberada — foi gap entre o **modelo mental** da LLM sobre a tool e o **comportamento real** do código.
+
+3. **Porto Inseguro tinha o conceito mas não a definição explícita** de "prêmio". A CG142 tem várias seções sobre "pagamento de prêmio", "devolução de prêmio", "vencimento" — mas nenhuma diz **"prêmio é o valor pago..."**. A LLM percebia semanticamente que os chunks falavam ao lado da pergunta literal e tentava reformular a query.
+
+#### Frente A.2 — Glossário Porto Inseguro (raiz do problema)
+
+Solução pra descoberta 3: criar um novo arquivo KB com definições explícitas no estilo Porto Inseguro.
+
+**Arquivo: [data/kb/10-porto-glossario.md](data/kb/10-porto-glossario.md)** — 12 termos centrais do seguro auto:
+
+| Termo | Tópico |
+|---|---|
+| Prêmio | "Valor que você paga à Porto Inseguro para manter ativa a cobertura..." |
+| Sinistro | "Qualquer evento previsto na sua apólice que cause um dano coberto..." |
+| Franquia | "Sua participação financeira em caso de sinistro parcial..." (cita reduzida/normal/aumentada) |
+| Cobertura | "Conjunto de riscos que o seu seguro auto protege..." (cita compreensiva/RFI/RCF-V) |
+| Apólice | "Contrato formal do seu seguro auto com a Porto Inseguro..." |
+| Segurado | "Pessoa para quem o seguro é contratado..." (cita condutor principal e adicional) |
+| Indenização | "Valor que a Porto Inseguro paga a você quando um sinistro coberto acontece..." |
+| Carência | "Período inicial após contratar o seguro durante o qual algumas coberturas ainda não valem..." |
+| Vigência | "Período em que sua apólice está ativa e as coberturas valem..." |
+| Bonus (FAB) | "Desconto progressivo no prêmio que você ganha por não dar sinistro na vigência anterior..." |
+| Endosso | "Alteração formal feita na apólice durante a vigência..." |
+| Aviso de Sinistro | "Comunicação formal à Porto Inseguro de que aconteceu um evento coberto..." |
+| DPVAT | "Seguro obrigatório separado do seu seguro auto..." (esclarece diferenças) |
+
+Cada definição segue padrão consistente: **frase-chave em negrito + contexto + exemplo prático + (quando aplicável) "não confundir com X"**.
+
+**Atualização de [scripts/ingest_kb.py:42](scripts/ingest_kb.py#L42)**: `SOURCE_MAP` ganhou entrada `"10-porto-glossario.md": ("porto-glossario", "primary")`. Source label `porto-glossario` foi adicionado à docstring de [rag.py](src/insurmind/rag.py) Chunk.
+
+**Re-ingestão**: `python scripts/ingest_kb.py` — KB cresceu de 298 → **312 chunks** (14 chunks do novo glossário).
+
+#### Frente A.3 — Calibração empírica do threshold
+
+Com o glossário Porto adicionado, smoke tests pelo CLI do `rag.py` pra observar distâncias e re-calibrar threshold.
+
+**Distâncias observadas** (top chunk, tier=primary):
+
+| Query | Distância | Tipo |
+|---|---|---|
+| "o que e premio em seguro auto" | **0.204** | In-scope com glossário direto |
+| "seguro de drone agricola comercial" | **0.325** | Off-product mas seguros-adjacente |
+| "como fazer brigadeiro receita doce" | **0.387** | Off-domain absoluto |
+
+**Decisão**: `SCORE_THRESHOLD = 0.40` em [rag.py:34](src/insurmind/rag.py#L34). Threshold deliberadamente um pouco acima da maior distância "Porto cobre razoavelmente" pra dar margem, mas baixo o suficiente pra fallback disparar em queries verdadeiramente off-Porto.
+
+**Validação empírica após calibração** (smoke test repetido):
+
+- "o que é prêmio?" → top primary 0.204 ≤ 0.40 → **sem fallback** ✓
+- "brigadeiro receita doce" → top primary 0.403 > 0.40 → **dispara fallback** ✓ (chunk FENACOR de "Beneficiário" entrou na posição 5 do merge final)
+
+**O sistema tieirizado agora funciona como documentado.**
+
+#### Resultados quantitativos
+
+| Métrica | Antes da Frente A | Depois da Frente A |
+|---|---|---|
+| Rounds da LLM pra "o que é prêmio?" | 5 | **1** |
+| Tokens de input acumulados | ~60.000 | **~5.000** (-92%) |
+| Custo estimado (Sonnet 4.5) | ~$0.20 | **~$0.02** (-90%) |
+| Latência típica | ~12-15s | **~3-4s** (-70%) |
+| Chamadas ao retrieve_kb | 4 | 1 |
+| Chamadas ao ChromaDB | 4-8 (com fallbacks teóricos) | 1 |
+| Score threshold | 1.30 (dormente) | **0.40** (calibrado) |
+| Chunks na KB | 298 | **312** |
+| Source labels disponíveis | porto-cg, porto-faq, susep-glossario, susep-cartilha, fenacor | + **porto-glossario** |
+
+#### Princípios de engenharia derivados (vale citar nos slides)
+
+1. **Logging instrumental > calibração por palpite.** A descoberta do threshold dormente só foi possível depois de adicionar logs estruturados. Quanto tempo se perderia "ajustando" parâmetros sem ver o comportamento real? Princípio: *quando algo parece estranho num sistema com LLM, suspeite primeiro das suposições, depois instrumente, depois calibre — nessa ordem*.
+
+2. **Narração da LLM ≠ telemetria do sistema.** A LLM expressa intenções no texto que escreve pro usuário. Essas intenções podem não se realizar — porque ela não controla a infraestrutura, só envia parâmetros via tool_use. **Confiar na narração da LLM como fonte de verdade do que o sistema fez é erro grave** em produção. O log estruturado é a única fonte real.
+
+3. **Similaridade vetorial ≠ utilidade pra resposta.** Um chunk pode ter distância 0.20 (ótima similaridade) e ainda não conter a definição que o usuário pediu. Chunks de "pagamento de prêmio" tinham distância 0.27 a "o que é prêmio?" mas falavam ao lado da pergunta. Esse problema é fundamental de RAG, não defeito do projeto. Solução: **enriquecer a KB com conteúdo no formato esperado** (definições explícitas), em vez de tentar calibrar threshold pra contornar.
+
+4. **Conhecimento da LLM tem gradações.** A LLM "sabe" o que é prêmio (do treino) mas precisa do RAG porque: (a) precisa do texto específico Porto, (b) precisa de citação verificável, (c) o anti-alucinação proíbe inventar. RAG não substitui conhecimento da LLM — **substitui a autoridade da fonte**.
+
+5. **e5-base comprime espaço vetorial em domínios estreitos.** Pra textos de seguros em PT-BR, distâncias ficam em 0.2-0.4 mesmo pra queries off-domain. Implicação: threshold de fallback precisa ser muito apertado (~0.40) pra ser útil, ou você precisa de outra heurística. Conhecimento útil pra projetos futuros com domínios homogêneos.
+
+#### Limitação conhecida pendente
+
+A **descoberta 2** ainda não foi corrigida (narração forward-looking da LLM mencionando "vou buscar no SUSEP" quando na prática não cai em fallback). Atenuação suave já implementada via descrição da tool. Solução completa exigiria:
+- Detectar palavras-chave na query da LLM e forçar `tier=fallback` (acoplamento ruim entre LLM e código)
+- OU adicionar instrução explícita no system prompt sobre o que ela controla vs não controla
+- OU remover menção a "SUSEP e FENACOR" da descrição da tool (perderia info útil)
+
+Decisão: deixar como está e documentar como característica pedagógica (a LLM "tenta" mas o sistema decide). Pra apresentação, virou estudo de caso valioso.
+
+#### Próxima frente
+
+Frente B = deploy (Render + Vercel). Com o RAG calibrado, custo de inferência fica em faixa que viabiliza demo pública sem queimar crédito. Próximas decisões de deploy:
+- `.chroma/` no container ou rebuild no startup?
+- Cold starts do Render free tier (15min de inatividade dorme)
+- CORS pra Vercel
+- `INSURMIND_LOG_LEVEL=INFO` no Render pra ter logs auditáveis

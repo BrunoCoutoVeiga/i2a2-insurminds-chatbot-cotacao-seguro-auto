@@ -12,9 +12,13 @@ do motor (Claude SDK: MCP tools; Anthropic API: tool_use blocks; etc.).
 
 from __future__ import annotations
 
+import logging
+
 from .llm import Tool
 from .quote import QuoteInput, compute_quote_mock
 from .rag import retrieve_kb
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -39,8 +43,10 @@ _RETRIEVE_KB_SCHEMA = {
 
 async def _handler_retrieve_kb(args: dict) -> dict:
     consulta = args["consulta"]
+    logger.info("TOOL retrieve_kb invocada pela LLM com consulta=%r", consulta)
     chunks = await retrieve_kb(consulta, k=5)
     if not chunks:
+        logger.warning("TOOL retrieve_kb: 0 chunks retornados")
         return {"text": "Nenhum trecho relevante encontrado na base de conhecimento."}
 
     parts: list[str] = [f"Trechos relevantes para a consulta: {consulta!r}\n"]
@@ -54,7 +60,12 @@ async def _handler_retrieve_kb(args: dict) -> dict:
         "\nInstruções para o agente: use estes trechos como fonte primária da "
         "resposta ao usuário. CITE a fonte (formato: \"Fonte: {source} ({file}\")"
     )
-    return {"text": "".join(parts)}
+    result_text = "".join(parts)
+    logger.info(
+        "TOOL retrieve_kb devolvendo: %d chunks, %d chars de texto pra LLM",
+        len(chunks), len(result_text),
+    )
+    return {"text": result_text}
 
 
 retrieve_kb_tool = Tool(
@@ -101,8 +112,17 @@ _COMPUTE_QUOTE_SCHEMA = {
 
 
 async def _handler_compute_quote(args: dict) -> dict:
+    logger.info(
+        "TOOL compute_quote_mock invocada: %s %s %s, CEP=%s, cobertura=%s",
+        args.get("modelo"), args.get("versao"), args.get("ano"),
+        args.get("cep_pernoite"), args.get("tipo_cobertura"),
+    )
     qin = QuoteInput(**args)
     opcoes = compute_quote_mock(qin)
+    logger.info(
+        "TOOL compute_quote_mock devolvendo 3 opções: %s",
+        ", ".join(f"{o.nivel_franquia}=R${o.premio_anual:,.2f}" for o in opcoes),
+    )
 
     cob_label = {
         "compreensiva": "Compreensiva",
@@ -168,6 +188,7 @@ _ESCALAR_HUMANO_SCHEMA = {
 
 async def _handler_escalar_humano(args: dict) -> dict:
     motivo = args.get("motivo", "(motivo não informado)")
+    logger.info("TOOL escalar_humano invocada: motivo=%r", motivo)
     text = (
         f"Encaminhamento ao atendimento humano. Motivo: {motivo}\n\n"
         "Mensagem padrão a apresentar ao usuário:\n\n"

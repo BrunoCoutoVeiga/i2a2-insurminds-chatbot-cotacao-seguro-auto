@@ -8,14 +8,17 @@ interface Props {
   messages: ChatMessage[];
   isLoading: boolean;
   debugMode: boolean;
-  shouldHideLastAnswer: boolean;
+  /** True quando o agente ainda tem entregas (`agent_delivering_answer_to_user`)
+   * pendentes pra revelar no debug mode. Mostra um placeholder após a última
+   * msg do usuário convidando a clicar "▶ Próximo passo". */
+  showPendingPlaceholder: boolean;
 }
 
 export function ChatMessages({
   messages,
   isLoading,
   debugMode,
-  shouldHideLastAnswer,
+  showPendingPlaceholder,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -24,6 +27,15 @@ export function ChatMessages({
   }, [messages, isLoading]);
 
   const showWelcome = messages.length === 0 && !isLoading;
+  const lastMessage = messages[messages.length - 1];
+  // Placeholder aparece quando: debug ON, agente já respondeu (não está
+  // carregando), tem entregas pendentes pra revelar, E a última msg é do
+  // usuário (nenhuma bolha do assistente apareceu ainda nesse turno).
+  const showPlaceholder =
+    debugMode &&
+    !isLoading &&
+    showPendingPlaceholder &&
+    lastMessage?.role === "user";
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
@@ -42,32 +54,22 @@ export function ChatMessages({
           />
         )}
 
-        {messages.map((m, i) => {
-          const isLast = i === messages.length - 1;
-          if (
-            debugMode &&
-            shouldHideLastAnswer &&
-            m.role === "assistant" &&
-            isLast
-          ) {
-            return (
-              <div
-                key={i}
-                className="flex w-full items-start gap-3 justify-start"
-              >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-lg">
-                  🚗
-                </div>
-                <div className="max-w-[80%] rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-                  📍 <span className="font-medium">Modo Debug ativo</span> — clique
-                  em <strong>▶ Próximo passo</strong> no painel lateral pra ver a
-                  resposta aparecer.
-                </div>
-              </div>
-            );
-          }
-          return <MessageBubble key={i} message={m} />;
-        })}
+        {messages.map((m, i) => (
+          <MessageBubble key={i} message={m} />
+        ))}
+
+        {showPlaceholder && (
+          <div className="flex w-full items-start gap-3 justify-start">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-lg">
+              🚗
+            </div>
+            <div className="max-w-[80%] rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+              📍 <span className="font-medium">Modo Debug ativo</span> — clique
+              em <strong>▶ Próximo passo</strong> no painel lateral pra ver as
+              respostas aparecerem.
+            </div>
+          </div>
+        )}
 
         {isLoading && (
           <div className="flex w-full items-start gap-3 justify-start">

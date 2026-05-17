@@ -3,8 +3,9 @@
 /**
  * Custom node pro Agent. Default nodes do React Flow só têm 1 source e 1 target
  * handle (baseado em sourcePosition/targetPosition). Como o Agent precisa
- * conectar pra cima (LLM), pra direita (Tools) e receber da esquerda (User) +
- * de cima (LLM resposta), criamos 4 handles explícitos com IDs nomeados.
+ * conectar bidirecionalmente — pra cima (LLM, ambos sentidos), pra direita
+ * (Tools, ambos sentidos), pra esquerda (User, ambos sentidos) — criamos 6
+ * handles explícitos com IDs nomeados, um por (lado × direção).
  *
  * Edges especificam qual handle usar via `sourceHandle` / `targetHandle`.
  */
@@ -34,6 +35,12 @@ export function AgentNode({ data }: NodeProps) {
         type="source"
         position={Position.Right}
         id="to-tools"
+        style={hiddenHandle}
+      />
+      <Handle
+        type="target"
+        position={Position.Right}
+        id="from-tools"
         style={hiddenHandle}
       />
       <Handle

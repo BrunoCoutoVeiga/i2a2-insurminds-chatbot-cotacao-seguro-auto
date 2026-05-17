@@ -83,11 +83,18 @@ Usuário → [ Chat UI Streamlit ] → [ Agente / Router de intent ]
 
 ## Stack
 
-- **Python 3.12**.
-- **Agente**: `claude-agent-sdk` (Claude Code local — apenas a primeira implementação; o agente é **agnóstico ao motor**).
+**Backend (Python 3.12):**
+- **Agente**: arquitetura agnóstica — 3 providers implementados:
+  - `claude_code` (default em CLI) — `claude-agent-sdk` spawna a CLI local do Claude Code. Autodispatch de tools via MCP (pula passos 5+6 do Modo Debug).
+  - `anthropic_api` — SDK `anthropic` chamando a API HTTPS direta, loop manual de tool calls. Sem dependência de binário CLI → único viável pra deploy cloud.
+  - `gemini` — Google GenAI SDK, loop manual de tool calls.
 - **Vector store**: ChromaDB local.
 - **Embeddings**: `intfloat/multilingual-e5-base` via `sentence-transformers` (PT-BR-friendly, sem custo, local).
-- **UI**: Streamlit.
+- **API HTTP**: FastAPI + sse-starlette (Server-Sent Events pra streamar eventos do agente).
+
+**UIs (duas, em paralelo — Streamlit não foi descontinuada):**
+- **Streamlit** (`src/insurmind/ui.py`) — UI didática integrada ao pacote Python, ideal pra demo standalone (`streamlit run`).
+- **Next.js 16 + React 19 + Tailwind v4 + shadcn/ui** (`web/`) — UI moderna com diagrama animado React Flow do Modo Debug. Consome o backend FastAPI via SSE.
 
 **Stack proposta pelo João descartada explicitamente:** OpenAI `gpt-4o-mini` + `text-embedding-3-small` (OpenAI) + **LangChain**. Por quê:
 
@@ -102,9 +109,12 @@ Trocar de motor de inferência (Claude → OpenAI → Gemini → Ollama) é uma 
 
 O agente **não pode ficar acoplado** ao Claude Agent SDK. A escolha do motor é feita via env var `INSURMIND_LLM` pela factory em `src/insurmind/llm/__init__.py`. Implementações ficam em `src/insurmind/llm/<motor>.py`:
 
-- `claude_code.py` — implementação default (Claude Code SDK local, autodispatch de tools via MCP).
-- `gemini.py` — implementação Gemini API (Google GenAI SDK) com controle MANUAL do loop de tool calls. Pré-requisito do Modo Debug pra ter pause real entre passos. Requer `GEMINI_API_KEY` em `.env` (free tier em https://aistudio.google.com/apikey). Default model: `gemini-2.5-flash`.
-- `anthropic_api.py`, `ollama.py` — stubs com `NotImplementedError` (sinalizam o contrato).
+- `claude_code.py` — default em CLI. Claude Code SDK local, autodispatch de tools via MCP. **Limitação**: requer `claude.exe` no PATH e faz autodispatch — pula passos 5+6 do Modo Debug.
+- `anthropic_api.py` — Anthropic API direta via SDK `anthropic`. Loop manual de tool calls. Sem CLI → funciona em deploy cloud. Requer `ANTHROPIC_API_KEY` em `.env`. Default model: `claude-sonnet-4-5` (override via `ANTHROPIC_MODEL`).
+- `gemini.py` — Google Gemini API. Loop manual de tool calls. Requer `GEMINI_API_KEY` em `.env` (free tier em https://aistudio.google.com/apikey: 15 req/min, 1500 req/dia). Default model: `gemini-2.5-flash`.
+- `ollama.py` — stub com `NotImplementedError` (sinaliza o contrato pra implementação futura).
+
+**Default em produção (web)**: `anthropic_api`. Default na CLI Python: `claude_code` (gratuito durante dev se o usuário tiver Claude Code instalado e logado).
 
 Tools são definidas em formato agnóstico (`Tool` dataclass em `src/insurmind/llm/base.py`) — `name`, `description`, `parameters_schema` (JSON Schema), `handler` async. Cada provider traduz para o formato nativo do motor (no Claude SDK: `@tool` + `create_sdk_mcp_server`).
 
@@ -129,7 +139,8 @@ chatbot/
 │   │   ├── 06-fenacor-glossario.md # ✅ FENACOR ~85 termos (fallback)
 │   │   ├── 07-cartilha-susep.md    # ✅ Cartilha SUSEP 2006 (fallback)
 │   │   ├── 08-porto-condicoes-gerais.md  # ✅ Porto Inseguro CG142 — FONTE PRIMÁRIA
-│   │   └── 09-porto-faq.md         # ✅ FAQ Porto Auto, 97 Q&A em 6 categorias — FONTE PRIMÁRIA
+│   │   ├── 09-porto-faq.md         # ✅ FAQ Porto Auto, 97 Q&A em 6 categorias — FONTE PRIMÁRIA
+│   │   └── 10-porto-glossario.md   # ✅ 12 termos centrais definidos no estilo Porto (criado 2026-05-17 pra resolver "Porto tem o conceito mas não tem a DEFINIÇÃO")
 │   ├── raw/                        # arquivos brutos baixados
 │   │   ├── 06-fenacor-glossario.txt
 │   │   ├── 07-cartilha-susep.pdf
@@ -152,19 +163,30 @@ chatbot/
 │   └── porto-faq-parsed.json              # ✅ debug do parser
 ├── src/insurmind/
 │   ├── __init__.py
-│   ├── agent.py                    # ✅ orquestrador agnóstico
+│   ├── agent.py                    # ✅ orquestrador agnóstico (chat_stream_events emite 8 eventos agent-centric)
+│   ├── api.py                      # ✅ FastAPI + SSE — backend HTTP da UI Next.js
 │   ├── prompts.py                  # ✅ system prompt
 │   ├── tools.py                    # ✅ 3 tools: retrieve_kb, compute_quote_mock, escalar_humano
 │   ├── llm/                        # ✅ camada agnóstica
 │   │   ├── base.py
-│   │   ├── claude_code.py          # ✅ default — autodispatch de tools via MCP
-│   │   ├── gemini.py               # ✅ controle manual de tool calls (necessário pro Modo Debug)
-│   │   ├── anthropic_api.py        # stub
+│   │   ├── claude_code.py          # ✅ autodispatch via MCP (default CLI; limitação: pula passos 5+6 do debug)
+│   │   ├── anthropic_api.py        # ✅ API direta, loop manual (default web; funciona em deploy cloud)
+│   │   ├── gemini.py               # ✅ free tier, loop manual (alternativa free pra debug completo)
 │   │   └── ollama.py               # stub
 │   ├── rag.py                      # ✅ retrieval tieirizado em Chroma (primary Porto / fallback SUSEP+FENACOR)
 │   ├── quote.py                    # ✅ motor mock com 13 campos → 3 opções de franquia
-│   ├── events.py                   # ✅ AgentEvent dataclass (base do Modo Debug step-by-step)
+│   ├── events.py                   # ✅ AgentEvent — 8 EventTypes agent-centric (gerúndio, agente como sujeito)
 │   └── ui.py                       # ✅ Streamlit chat multi-turno + Modo Debug step-by-step funcional
+├── web/                            # ✅ UI Next.js 16 (paralela à Streamlit)
+│   ├── app/page.tsx                # ✅ chat + painel debug lado a lado
+│   ├── components/
+│   │   ├── chat/                   # ✅ ChatMessages, ChatInput (com toggle Modo Debug inline)
+│   │   └── debug/                  # ✅ DebugPanel, EventCard (auto-scroll + auto-collapse),
+│   │                               #     AgentDiagram (React Flow com edges bidirecionais),
+│   │                               #     AgentNode/ToolNode (custom nodes, 4+ handles),
+│   │                               #     RagBadgeNode (zona RAG visual didática)
+│   ├── lib/{api,types,utils}.ts    # ✅ parser SSE (com fix CRLF), types espelhando backend
+│   └── public/porto-inseguro-logo.jpg
 ├── scripts/                        # data prep + pipelines
 │   ├── fetch_porto_faq.py          # ✅ baixa HTMLs da FAQ Porto Auto
 │   ├── build_porto_faq_md.py       # ✅ parseia HTML, categoriza, gera 09-porto-faq.md
@@ -188,19 +210,28 @@ chatbot/
 
 KB organizada em camadas — **Porto Inseguro é a fonte primária**, SUSEP/FENACOR/cartilha são fallback:
 
-| Arquivo | Fonte | Etiqueta no texto | Uso |
+| Arquivo | Fonte | Tier | Uso |
 |---|---|---|---|
-| [08-porto-condicoes-gerais.md](data/kb/08-porto-condicoes-gerais.md) | Porto Inseguro CG142 (PDF oficial 01/05/2026, 174 pgs) | implícito (todo o arquivo é Porto) | **PRIMÁRIA** — consulta primeiro |
-| [09-porto-faq.md](data/kb/09-porto-faq.md) | [Porto Inseguro FAQ Auto](https://www.portoinseguro.com.br/canal-de-ajuda/categorias/faqs/auto), 97 Q&A em 6 categorias | implícito | **PRIMÁRIA** — consulta primeiro |
-| [07-cartilha-susep.md](data/kb/07-cartilha-susep.md) | Cartilha SUSEP 2006 | `[SUSEP]` | Fallback (regras gerais do setor) |
-| [02-glossario.md](data/kb/02-glossario.md) | SUSEP (página Auto) + sintético | `[SUSEP]` / `[Sintético]` | Fallback (termos regulatórios) |
-| [06-fenacor-glossario.md](data/kb/06-fenacor-glossario.md) | FENACOR | `[FENACOR]` | Fallback (termos de mercado) |
+| [10-porto-glossario.md](data/kb/10-porto-glossario.md) | **Glossário próprio** (criado 2026-05-17), 12 termos centrais no estilo Porto | `primary` (`porto-glossario`) | **PRIMÁRIA** — pega definições conceituais em 1 round |
+| [08-porto-condicoes-gerais.md](data/kb/08-porto-condicoes-gerais.md) | Porto Inseguro CG142 (PDF oficial 01/05/2026, 174 pgs) | `primary` (`porto-cg`) | **PRIMÁRIA** — regras detalhadas e procedimentais |
+| [09-porto-faq.md](data/kb/09-porto-faq.md) | Porto Inseguro FAQ Auto, 97 Q&A em 6 categorias | `primary` (`porto-faq`) | **PRIMÁRIA** — perguntas frequentes do cliente |
+| [07-cartilha-susep.md](data/kb/07-cartilha-susep.md) | Cartilha SUSEP 2006 | `fallback` (`susep-cartilha`) | Fallback (regras gerais do setor) |
+| [02-glossario.md](data/kb/02-glossario.md) | SUSEP (página Auto) + sintético | `fallback` (`susep-glossario`) | Fallback (termos regulatórios) |
+| [06-fenacor-glossario.md](data/kb/06-fenacor-glossario.md) | FENACOR | `fallback` (`fenacor`) | Fallback (termos de mercado) |
 
-**Lógica de retrieval (a implementar em `rag.py`):**
+**Total**: 312 chunks (244 primary + 68 fallback), persistidos em `.chroma/` via `python scripts/ingest_kb.py`.
 
-1. Buscar primeiro nos chunks com `source` ∈ {`porto-cg`, `porto-faq`}.
-2. Se score abaixo do threshold ou nenhum chunk relevante → buscar em SUSEP/FENACOR.
-3. Sempre retornar fonte citada na resposta final.
+**Lógica de retrieval (em [rag.py](src/insurmind/rag.py)):**
+
+1. Sempre faz query no Chroma com `where={'tier':'primary'}` — exclui SUSEP/FENACOR da disputa.
+2. Se a melhor distância retornada estiver **≤ `SCORE_THRESHOLD = 0.40`** → primary satisfaz, retorna só esses chunks.
+3. Caso contrário → faz segunda query com `where={'tier':'fallback'}` e mescla os resultados ordenados por distância.
+4. A LLM recebe os 5 chunks finais com source label visível ("Fonte: porto-glossario", "Fonte: fenacor" etc.) — é assim que ela "sabe" de onde veio.
+
+**Calibração empírica do threshold** (2026-05-17): valor inicial era 1.30 (placeholder). Logs revelaram que e5-base nesse domínio comprime distâncias em 0.2-0.4 — threshold 1.30 nunca disparava fallback. Re-calibrado pra 0.40 com base em distâncias reais observadas:
+- Porto-perfect (in-scope com glossário): ~0.20 → no fallback ✓
+- Off-product mas seguros: ~0.32 → no fallback ✓
+- Off-domain absoluto ("brigadeiro"): ~0.40+ → **dispara fallback** ✓
 
 **Por que essa ordem:** o glossário do produto (Porto) é específico do contrato do usuário — mais assertivo. SUSEP/FENACOR são definições genéricas do setor (úteis quando o termo não está no produto). Decisão validada pela Adriele na reunião.
 
@@ -220,8 +251,21 @@ KB organizada em camadas — **Porto Inseguro é a fonte primária**, SUSEP/FENA
 4. **Receber tarifador refinado** (João Carlos + Adriele) → substituir implementação interna de `compute_quote_mock` mantendo assinatura idêntica.
 5. **UI Streamlit** em `src/insurmind/ui.py` — `st.chat_message`/`st.chat_input`, histórico em `st.session_state`, card pra cotação, botão "falar com atendente".
 6. ~~**Marco 21/05:** demo interna — chat responde 1 FAQ via RAG + 1 cotação mock.~~ ✅ **ATINGIDO em 2026-05-16** (5 dias antes do prazo). 4/4 cenários funcionando via CLI (`python -m insurmind.agent "..."`): FAQ → `retrieve_kb`, off-product → `escalar_humano`, off-domain → refuse direto sem tool, cotação completa → `compute_quote_mock` com 3 opções de franquia. Detalhes em `RELATORIO.md` sessão "2026-05-16 — Sprint 1 implementação".
-7. ~~**Sprint 2 (22-27/05):** refino de prompt, ajuste de retrieval, validações, deploy Streamlit Community Cloud, + painel "Modo Debug" na UI.~~ ✅ **Antecipada em 11 dias.** UI Streamlit multi-turno + provider Gemini + Modo Debug step-by-step funcional. Restante da Sprint 2 (deploy Community Cloud + ajustes de retrieval/prompt) opcional — pode rolar paralelo com Sprint 3.
-8. **Sprint 3 (28-29/05):** QA, doc técnica final, slides, ensaio, entrega.
+7. ~~**Sprint 2 (22-27/05):** refino de prompt, ajuste de retrieval, validações, deploy Streamlit Community Cloud, + painel "Modo Debug" na UI.~~ ✅ **Antecipada em 11 dias.** UI Streamlit multi-turno + provider Gemini + Modo Debug step-by-step funcional.
+8. ~~**Sprint 3 (28-29/05):** UI Next.js + Modo Debug v2 com diagrama animado + provider Anthropic API.~~ ✅ **Antecipada em 11 dias (executada em 2026-05-17).** Entregas:
+   - **Fase 1**: backend FastAPI + SSE (`src/insurmind/api.py`) expondo `chat_stream_events` via Server-Sent Events.
+   - **Fase 2**: scaffold Next.js 16 (Turbopack) + chat funcional + painel debug (timeline + JSON cru).
+   - **Fase 3**: diagrama animado React Flow no painel debug, com edges bidirecionais e custom nodes (AgentNode/ToolNode com handles nomeados).
+   - **Refator agent-centric**: 8 eventos em gerúndio com agente como sujeito, em vez de 5 system-centric ambíguos. Direção das setas no diagrama segue o sentido REAL do fluxo em cada passo.
+   - **Provider `anthropic_api`**: API direta da Anthropic via SDK `anthropic`, loop manual. Desbloqueia deploy cloud (não depende do `claude.exe`).
+   - **UX polishes do Modo Debug**: auto-scroll com `requestAnimationFrame`, auto-collapse de passos anteriores, header slim com Modo Debug movido pro ChatInput, ratio 2/5 chat / 3/5 debug, fonte Inter, RAG zone visual, foco automático no input, logo da Porto Inseguro.
+9. ~~**Frente A — Calibração RAG (2026-05-17 tarde)**~~ ✅ Concluída. Adicionado [data/kb/10-porto-glossario.md](data/kb/10-porto-glossario.md) (12 termos centrais no estilo Porto), threshold recalibrado de 1.30 → 0.40 com base em distâncias empíricas, **logging interno detalhado** (`INSURMIND_LOG_LEVEL` env var → rag.py + tools.py + anthropic_api.py). KB: 298 → **312 chunks**. Impacto: caso "o que é prêmio?" caiu de **5 rounds/60K tokens (~$0.20)** pra **1 round/~5K tokens (~$0.02)** — 90% redução de custo. Mudança de entregas no chat (`agent_delivering_answer_to_user` agora pode emitir múltiplas vezes por turno — bolhas separadas). Detalhes em RELATORIO.md sessão "2026-05-17 (tarde) — Frente A".
+10. **Frente B / Fase 4 (a executar):** deploy + materiais de entrega:
+    - Backend FastAPI → Render (free tier, container Python). Cuidado com `.chroma/` (~50MB): bundlar no image ou rebuild no startup.
+    - Frontend Next.js → Vercel (free tier, integração direta com GitHub)
+    - QA conversacional (10 FAQs do DoD do João + edge cases + jailbreak attempts). Cenário recomendado pra demonstrar multi-RAG: *"Se eu emprestar meu carro pro meu primo de 22 anos e ele bater, o seguro cobre? E muda alguma coisa se eu não tiver declarado ele como condutor?"* (mistura 3 conceitos → força 2-3 rodadas de retrieve_kb).
+    - Slides de apresentação (~10-12) destacando RAG tieirizado + Modo Debug como diferencial técnico
+    - Receber tarifador real do João + Adriele e substituir miolo de `compute_quote_mock` (interface estável)
 
 ## Princípios de trabalho
 
@@ -234,21 +278,49 @@ KB organizada em camadas — **Porto Inseguro é a fonte primária**, SUSEP/FENA
 - **Auditabilidade de citações:** quando um artefato (decisão, princípio, exemplo) for derivado de fala específica do professor numa aula, citar o timestamp da transcrição (formato `aula-NN @ HH:MM:SS`). Os `.srt` originais ficam em `transcribe_yt/transcricoes/` (ver "Origem deste repositório"). Para citações da reunião do grupo, citar [meetings/20260514.txt](meetings/20260514.txt).
 - **Anti-alucinação no RAG:** prompt do sistema exige citação de fonte para toda resposta factual; threshold de similaridade no retriever; se nenhum chunk passar o threshold, responder "não encontrei essa informação" e oferecer encaminhamento humano.
 - **Interface-first para integrações que ainda virão do grupo:** a planilha de tarifador está sendo construída por João Carlos + Adriele. Implementamos `compute_quote_mock` com **interface estável** (`QuoteInput`/`QuoteOption` dataclasses) e implementação interna em dict in-memory. Quando a planilha chegar, **só a implementação interna muda** — assinatura da função, system prompt, UI, testes permanecem.
-- **Agente como event-stream, não black box:** `agent.run()` é um `AsyncIterator` que emite eventos (`llm_call`, `llm_response_text`, `llm_response_tool_use`, `tool_call`, `tool_result`, `final_answer`). UI normal consome o stream silenciosamente; modo debug consome o mesmo stream, mostra cada evento e pausa entre eles. **Nenhum código duplicado** — debug é "grátis" se o agente for desenhado certo desde o início.
+- **Agente como event-stream, não black box:** `agent.chat_stream_events()` é um `AsyncIterator[AgentEvent]` que emite **8 eventos agent-centric narrados em gerúndio** (refator 2026-05-17 — antes eram 5 sem perspectiva clara). Sequência canônica (FAQ com tool): `agent_received_user_input` → `agent_sending_to_llm` → `agent_received_tool_request_from_llm` → `agent_executing_tool` → `agent_received_tool_result` → `agent_sending_tool_result_to_llm` → `agent_received_text_from_llm` → `agent_delivering_answer_to_user`. Off-domain (LLM responde direto): só passos 1, 2, 7, 8. UI normal consome o stream silenciosamente; Modo Debug consome o MESMO stream, mostra cada evento e pausa entre eles. **Nenhum código duplicado**. Agente é sempre o sujeito ativo do evento — não "tool_called" mas "agent_executing_tool"; foco didático no orquestrador.
+- **Modo Debug com replay completo do turno:** o agente roda inteiro até `agent_delivering_answer_to_user`, **depois** a UI replaya passo-a-passo (não é narração ao vivo). Por isso o painel sabe com certeza quantos passos faltam ("Rodar até o final (N passos restantes)") — N é determinístico no momento do replay. Decisão deliberada: permite pause real entre passos sem segurar a LLM no meio do call.
+- **Diagrama animado como complemento didático:** [web/components/debug/AgentDiagram.tsx](web/components/debug/AgentDiagram.tsx) renderiza grafo React Flow com nodes (User, Agent, LLM, 3 tools, ChromaDB) e edges **bidirecionais** que acendem na direção certa por passo (passo 3 acende `LLM → Agent`, passo 4 acende `Agent → Tool`, etc.). Inclui **RagBadgeNode** — retângulo tracejado envolvendo `retrieve_kb` + `ChromaDB` com etiqueta "🧠 RAG", acende nos passos 4-5 do retrieve. Objetivo pedagógico: alunos perguntam "onde está o RAG" — visualmente delimitado.
+- **Multi-deliveries por turno (refator 2026-05-17 tarde):** quando a LLM responde com `[text, tool_use]` na mesma mensagem (anúncio antes de chamar tool), o agente emite **2 eventos `agent_delivering_answer_to_user` separados** no mesmo turno — um após o texto pré-tool e outro após o texto final pós-tool. A UI mostra como bolhas distintas no chat. Razão: a LLM "fala 2 vezes" ao usuário (anúncio + resposta final), e essas duas mensagens devem aparecer **separadas pelo tempo de execução da tool**, não grudadas no fim. Em Modo Debug, push progressivo conforme o usuário avança no `stepIndex` (`pushedDeliveriesRef` no [web/app/page.tsx](web/app/page.tsx) rastreia índices já empurrados).
+- **Logging interno como fonte de verdade do sistema:** `INSURMIND_LOG_LEVEL` (default INFO) configura logger em [api.py](src/insurmind/api.py). Loggers granulares em `insurmind.rag` (queries, decisões de tier, distâncias, source labels), `insurmind.tools` (invocações + tamanho do resultado), `insurmind.llm.anthropic_api` (rounds + stop_reason + tokens). Razão: a narração da LLM ao usuário expressa **intenções**, não eventos do sistema — *log estruturado é a única fonte real do que aconteceu*. Em produção: UI mostra narração da LLM (humana, fluida); log estruturado serve auditoria/debug interno. Não conflite as duas fontes.
+- **Threshold do RAG calibrado empiricamente, não chutado:** `SCORE_THRESHOLD = 0.40` em [rag.py](src/insurmind/rag.py) foi escolhido após observar distâncias reais nos logs. Valor inicial era 1.30 (placeholder) que NUNCA disparava fallback. e5-base nesse domínio comprime distâncias em 0.2-0.4. Princípio: **antes de calibrar parâmetros, instrumente. Antes de instrumentar, suspeite das suposições**. O caso prêmio (5 rounds desnecessários antes de descobrir que fallback nunca tinha rodado) virou estudo de caso desse princípio.
 
 ## Comandos úteis
 
 ```powershell
+# === Backend Python ===
+
 # Ativar venv
 .\.venv\Scripts\Activate.ps1
 
-# Instalar deps + data-prep deps (pra re-extrair PDFs em outra máquina)
+# Instalar deps + data-prep (pra re-extrair PDFs em outra máquina)
 pip install -e .[dev,dataprep]
 
-# Smoke test do agente
+# Smoke test do agente via CLI
 python -m insurmind.agent "O que é franquia?"
 
-# Trocar motor (quando implementado)
-$env:INSURMIND_LLM = "ollama"
+# Trocar motor de inferência
+$env:INSURMIND_LLM = "anthropic_api"  # ou "gemini", "claude_code"
 python -m insurmind.agent "..."
+
+# UI Streamlit standalone
+streamlit run src/insurmind/ui.py
+
+# Backend FastAPI (porta 8000) — pré-requisito da UI Next.js
+uvicorn insurmind.api:app --port 8000 --reload
+
+# === Frontend Next.js (em outro terminal) ===
+
+cd web
+npm install         # primeira vez
+npm run dev         # dev server em http://localhost:3000 (espera backend em :8000)
+npm run build       # production build + type check
 ```
+
+**Setup completo numa máquina nova:**
+1. Python: `python -m venv .venv && pip install -e .[dev,dataprep]`
+2. Node: `winget install OpenJS.NodeJS.LTS` (Windows) ou `brew install node` (Mac)
+3. Copiar `.env.example` → `.env` e preencher `ANTHROPIC_API_KEY` (ou `GEMINI_API_KEY`)
+4. Ingerir KB: `python scripts/ingest_kb.py` (gera Chroma local)
+5. Backend: `uvicorn insurmind.api:app --port 8000 --reload`
+6. Frontend: `cd web && npm install && npm run dev`

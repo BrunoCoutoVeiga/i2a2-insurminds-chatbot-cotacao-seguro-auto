@@ -40,11 +40,17 @@ CHUNK_OVERLAP = 200
 
 # Mapeamento arquivo → source + tier (estratégia de RAG tieirizado)
 SOURCE_MAP: dict[str, tuple[str, str]] = {
-    "02-glossario.md":            ("susep-glossario", "fallback"),
-    "06-fenacor-glossario.md":    ("fenacor",          "fallback"),
-    "07-cartilha-susep.md":       ("susep-cartilha",   "fallback"),
-    "08-porto-condicoes-gerais.md": ("porto-cg",       "primary"),
-    "09-porto-faq.md":            ("porto-faq",        "primary"),
+    "02-glossario.md":              ("susep-glossario", "fallback"),
+    "06-fenacor-glossario.md":      ("fenacor",         "fallback"),
+    "07-cartilha-susep.md":         ("susep-cartilha",  "fallback"),
+    "08-porto-condicoes-gerais.md": ("porto-cg",        "primary"),
+    "09-porto-faq.md":              ("porto-faq",       "primary"),
+    # 10-porto-glossario.md (criado 2026-05-17) ataca o caso "Porto tem o
+    # conceito mas não tem a DEFINIÇÃO" — em queries tipo "o que é prêmio?"
+    # os chunks Porto de procedimentos ranqueavam alto, sem definir o termo,
+    # forçando a LLM a múltiplas retentativas (60K tokens, 5 rounds). Com o
+    # glossário Porto, primary já satisfaz num round só.
+    "10-porto-glossario.md":        ("porto-glossario", "primary"),
 }
 
 

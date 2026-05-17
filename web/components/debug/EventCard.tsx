@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ChevronRight, CheckCircle2, Circle, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronRight, CheckCircle2, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { eventLabels, type AgentEvent } from "@/lib/types";
@@ -15,7 +15,39 @@ interface Props {
 export function EventCard({ index, event, isCurrent }: Props) {
   const [expanded, setExpanded] = useState(isCurrent);
   const [showJson, setShowJson] = useState(false);
-  const label = eventLabels[event.type];
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // Sincroniza expansão com isCurrent: passo atual abre, anteriores colapsam.
+  // O usuário ainda pode re-expandir manualmente um passo anterior — mas ao
+  // avançar pro próximo, a UI volta a focar só no atual pra não saturar.
+  useEffect(() => {
+    setExpanded(isCurrent);
+  }, [isCurrent]);
+
+  // Scroll automático: quando o card vira atual, alinha o TOPO dela com o
+  // topo do scroll container — assim o usuário vê o passo do início, mesmo
+  // se o conteúdo for maior que a viewport.
+  //
+  // `requestAnimationFrame` é crucial: sem ele, o scroll roda no mesmo tick
+  // em que setExpanded(true) foi chamado, ANTES do React reflowar o layout
+  // com a nova altura do card. Resultado: posiciona com altura antiga
+  // (colapsada), depois o card cresce e o título sai da viewport. Esperar 1
+  // frame garante que o reflow já aconteceu.
+  useEffect(() => {
+    if (isCurrent && cardRef.current) {
+      const id = requestAnimationFrame(() => {
+        cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      return () => cancelAnimationFrame(id);
+    }
+  }, [isCurrent]);
+
+  // Fallback defensivo: se o backend emitir um tipo desconhecido (ex.: agent.py
+  // ainda rodando com versão antiga após edit no events.py), não quebra a UI.
+  const label = eventLabels[event.type] ?? {
+    short: event.type,
+    tooltip: "Evento de tipo desconhecido — backend pode estar desatualizado.",
+  };
 
   const Icon = isCurrent ? Loader2 : CheckCircle2;
   const iconClass = isCurrent
@@ -32,7 +64,8 @@ export function EventCard({ index, event, isCurrent }: Props) {
   });
 
   return (
-    <Card className={cn("border", borderClass, "transition-colors")}>
+    <div ref={cardRef} className="scroll-mt-2">
+      <Card className={cn("border", borderClass, "transition-colors")}>
       <button
         type="button"
         onClick={() => setExpanded((x) => !x)}
@@ -51,6 +84,11 @@ export function EventCard({ index, event, isCurrent }: Props) {
 
       {expanded && (
         <div className="border-t border-zinc-200 px-3 py-3 text-sm">
+          {/* Descrição didática */}
+          <div className="mb-3 rounded bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-900">
+            {label.tooltip}
+          </div>
+
           <PayloadDetails event={event} />
 
           <div className="mt-3 flex items-center justify-between gap-2 text-xs text-zinc-500">
@@ -73,44 +111,77 @@ export function EventCard({ index, event, isCurrent }: Props) {
           )}
         </div>
       )}
-    </Card>
+      </Card>
+    </div>
   );
 }
 
 function PayloadDetails({ event }: { event: AgentEvent }) {
   const p = event.payload;
   switch (event.type) {
-    case "llm_call_start": {
-      const tools = (p.tools_available as { name: string; description: string }[]) ?? [];
+    case "agent_received_user_input":
       return (
         <div className="space-y-2">
           <div>
-            <span className="text-zinc-500">Mensagem do usuário:</span>{" "}
+            <span className="text-zinc-500">Mensagem recebida do usuário:</span>{" "}
             <code className="rounded bg-zinc-100 px-1 py-0.5 text-zinc-700">
               {String(p.user_message ?? "")}
             </code>
           </div>
           <div>
-            <span className="text-zinc-500">Histórico:</span>{" "}
+            <span className="text-zinc-500">Tamanho do histórico:</span>{" "}
             <span className="text-zinc-700">
               {String(p.history_length ?? 1)} mensagem
-              {Number(p.history_length ?? 1) > 1 ? "s" : ""}
+              {Number(p.history_length ?? 1) > 1 ? "s" : ""} (incluindo esta nova)
             </span>
-          </div>
-          <div>
-            <span className="text-zinc-500">Tools disponíveis:</span>
-            <ul className="ml-4 mt-1 list-disc text-zinc-700">
-              {tools.map((t) => (
-                <li key={t.name}>
-                  <code>{t.name}</code> — {t.description}
-                </li>
-              ))}
-            </ul>
           </div>
         </div>
       );
+
+    case "agent_sending_to_llm": {
+      const tools = (p.tools_available as { name: string; description: string }[]) ?? [];
+      return (
+        <div className="space-y-2">
+          <div className="text-zinc-500">O Agente está enviando à LLM:</div>
+          <ul className="ml-4 list-disc text-zinc-700 space-y-1">
+            <li>
+              <strong>System prompt</strong> (instruções de comportamento, persona,
+              regras, escopo).{" "}
+              <details className="inline">
+                <summary className="cursor-pointer text-blue-600 hover:underline inline">
+                  ver texto
+                </summary>
+                <pre className="mt-1 overflow-x-auto rounded bg-zinc-100 p-2 text-xs text-zinc-700 whitespace-pre-wrap">
+                  {String(p.system_prompt_full ?? "")}
+                </pre>
+              </details>
+            </li>
+            <li>
+              <strong>Mensagem do usuário:</strong>{" "}
+              <code className="rounded bg-zinc-100 px-1 py-0.5">
+                {String(p.user_message ?? "")}
+              </code>
+            </li>
+            <li>
+              <strong>Histórico:</strong> {String(p.history_length ?? 1)} mensagem(ns)
+            </li>
+            <li>
+              <strong>Tools disponíveis ({tools.length}):</strong>
+              <ul className="ml-4 mt-1 list-[circle] text-zinc-700">
+                {tools.map((t) => (
+                  <li key={t.name}>
+                    <code>{t.name}</code> — {t.description}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          </ul>
+        </div>
+      );
     }
-    case "tool_call_requested": {
+
+    case "agent_received_tool_request_from_llm":
+    case "agent_executing_tool": {
       const args = (p.args as Record<string, unknown>) ?? {};
       return (
         <div className="space-y-2">
@@ -121,7 +192,7 @@ function PayloadDetails({ event }: { event: AgentEvent }) {
             </code>
           </div>
           <div>
-            <span className="text-zinc-500">Parâmetros pedidos pela LLM:</span>
+            <span className="text-zinc-500">Parâmetros:</span>
             <ul className="ml-4 mt-1 list-disc text-zinc-700">
               {Object.entries(args).map(([k, v]) => (
                 <li key={k}>
@@ -133,7 +204,8 @@ function PayloadDetails({ event }: { event: AgentEvent }) {
         </div>
       );
     }
-    case "tool_result": {
+
+    case "agent_received_tool_result": {
       const preview = String(p.result_preview ?? "");
       return (
         <div className="space-y-2">
@@ -147,18 +219,31 @@ function PayloadDetails({ event }: { event: AgentEvent }) {
         </div>
       );
     }
-    case "llm_text": {
+
+    case "agent_sending_tool_result_to_llm":
+      return (
+        <div>
+          <span className="text-zinc-500">
+            Devolvendo o resultado da tool{" "}
+            <code>{String(p.name)}</code> pra LLM. Ela vai formular a resposta
+            final ao usuário incorporando essa informação.
+          </span>
+        </div>
+      );
+
+    case "agent_received_text_from_llm": {
       const text = String(p.text ?? "");
       return (
         <div>
-          <div className="text-zinc-500">LLM gerou texto:</div>
+          <div className="text-zinc-500">LLM gerou este texto:</div>
           <pre className="mt-1 overflow-x-auto rounded bg-zinc-100 p-2 text-xs text-zinc-700 whitespace-pre-wrap">
             {text.length > 500 ? text.slice(0, 500) + "..." : text}
           </pre>
         </div>
       );
     }
-    case "final_answer": {
+
+    case "agent_delivering_answer_to_user": {
       const text = String(p.text ?? "");
       return (
         <div className="space-y-2">
@@ -171,13 +256,14 @@ function PayloadDetails({ event }: { event: AgentEvent }) {
         </div>
       );
     }
-    case "error": {
+
+    case "error":
       return (
         <div className="rounded bg-red-50 border border-red-200 px-3 py-2 text-red-800 text-xs">
           ❌ <strong>{String(p.message ?? "Erro desconhecido")}</strong>
         </div>
       );
-    }
+
     default:
       return null;
   }
