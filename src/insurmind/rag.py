@@ -83,17 +83,24 @@ def _get_model():
     """Carrega o modelo e5 lazy. Primeira chamada custa ~3-30s dependendo
     do hardware; chamadas subsequentes retornam o cached singleton.
 
-    Se INSURMIND_USE_FP16=1, converte pra float16 após carregar (reduz RAM
-    pela metade — necessário pra caber em 512MB do free tier do Render).
+    Se INSURMIND_USE_FP16=1, carrega DIRETO em float16 via model_kwargs.
+    Crítico fazer assim em vez de .half() pós-load: .half() tem PICO de
+    memória durante a conversão (fp32 + fp16 simultaneamente = OOM em
+    512MB). Direto em fp16 não tem esse pico.
     """
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
-        logger.info("Carregando modelo de embedding '%s'...", EMBED_MODEL_NAME)
-        _model = SentenceTransformer(EMBED_MODEL_NAME)
+
+        kwargs = {}
         if os.environ.get("INSURMIND_USE_FP16") == "1":
-            logger.info("Convertendo modelo pra fp16 (metade da RAM)...")
-            _model = _model.half()
+            import torch
+            kwargs["model_kwargs"] = {"torch_dtype": torch.float16}
+            logger.info("Carregando modelo '%s' DIRETO em fp16...", EMBED_MODEL_NAME)
+        else:
+            logger.info("Carregando modelo '%s'...", EMBED_MODEL_NAME)
+
+        _model = SentenceTransformer(EMBED_MODEL_NAME, **kwargs)
         logger.info("Modelo carregado.")
     return _model
 

@@ -123,10 +123,12 @@ def main():
 
     print(f'Carregando modelo de embedding "{EMBED_MODEL_NAME}"...')
     print('(primeira vez: download ~500MB do HuggingFace; depois fica cacheado)')
-    model = SentenceTransformer(EMBED_MODEL_NAME)
+    kwargs = {}
     if os.environ.get("INSURMIND_USE_FP16") == "1":
-        print("Convertendo modelo pra fp16 (metade da RAM no build também).")
-        model = model.half()
+        import torch
+        kwargs["model_kwargs"] = {"torch_dtype": torch.float16}
+        print("Carregando DIRETO em fp16 (sem pico de memória da conversão pós-load).")
+    model = SentenceTransformer(EMBED_MODEL_NAME, **kwargs)
     print(f'Modelo carregado. Dim: {model.get_sentence_embedding_dimension()}')
 
     kb_dir = Path('data/kb')
