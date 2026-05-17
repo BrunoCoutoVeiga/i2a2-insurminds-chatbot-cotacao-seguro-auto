@@ -124,6 +124,9 @@ def main():
     print(f'Carregando modelo de embedding "{EMBED_MODEL_NAME}"...')
     print('(primeira vez: download ~500MB do HuggingFace; depois fica cacheado)')
     model = SentenceTransformer(EMBED_MODEL_NAME)
+    if os.environ.get("INSURMIND_USE_FP16") == "1":
+        print("Convertendo modelo pra fp16 (metade da RAM no build também).")
+        model = model.half()
     print(f'Modelo carregado. Dim: {model.get_sentence_embedding_dimension()}')
 
     kb_dir = Path('data/kb')
@@ -144,7 +147,9 @@ def main():
 
         # E5 exige prefixo "passage: " na ingestão (e "query: " na busca)
         texts_to_embed = [f'passage: {c["text"]}' for c in chunks]
-        embeddings = model.encode(texts_to_embed, show_progress_bar=False).tolist()
+        # .astype('float32') pra garantir compat com Chroma (modelo em fp16
+        # emite embeddings fp16; Chroma espera fp32).
+        embeddings = model.encode(texts_to_embed, show_progress_bar=False).astype('float32').tolist()
 
         ids: list[str] = []
         documents: list[str] = []

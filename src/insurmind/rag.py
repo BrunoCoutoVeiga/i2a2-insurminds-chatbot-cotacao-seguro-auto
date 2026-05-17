@@ -81,12 +81,19 @@ _collection: object | None = None
 
 def _get_model():
     """Carrega o modelo e5 lazy. Primeira chamada custa ~3-30s dependendo
-    do hardware; chamadas subsequentes retornam o cached singleton."""
+    do hardware; chamadas subsequentes retornam o cached singleton.
+
+    Se INSURMIND_USE_FP16=1, converte pra float16 após carregar (reduz RAM
+    pela metade — necessário pra caber em 512MB do free tier do Render).
+    """
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
         logger.info("Carregando modelo de embedding '%s'...", EMBED_MODEL_NAME)
         _model = SentenceTransformer(EMBED_MODEL_NAME)
+        if os.environ.get("INSURMIND_USE_FP16") == "1":
+            logger.info("Convertendo modelo pra fp16 (metade da RAM)...")
+            _model = _model.half()
         logger.info("Modelo carregado.")
     return _model
 
@@ -111,9 +118,16 @@ def _get_collection():
 
 
 def _embed_query(query: str) -> list[float]:
-    """E5 exige prefixo `query: ` em consultas (vs `passage: ` na ingestão)."""
+    """E5 exige prefixo `query: ` em consultas (vs `passage: ` na ingestão).
+
+    Convertemos pra float32 explicitamente porque com INSURMIND_USE_FP16=1 o
+    modelo retorna fp16, e o ChromaDB internamente trabalha com fp32 — manda
+    fp16 e dá erro de dtype mismatch.
+    """
     model = _get_model()
-    return model.encode([f'query: {query}']).tolist()[0]
+    emb = model.encode([f'query: {query}'])
+    # numpy → fp32 antes de listificar pra ChromaDB
+    return emb.astype('float32').tolist()[0]
 
 
 def _query_chunks(query_embedding: list[float], k: int, tier: str | None) -> list[Chunk]:
