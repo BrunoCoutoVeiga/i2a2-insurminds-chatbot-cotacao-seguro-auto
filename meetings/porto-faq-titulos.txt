@@ -1,0 +1,217 @@
+# Lista de títulos da FAQ Porto Seguro Auto
+
+Capturada manualmente por Bruno em 2026-05-16, copiando o conteúdo visível
+da página índice https://www.portoseguro.com.br/canal-de-ajuda/categorias/faqs/auto
+(a página é SPA, conteúdo só renderiza no browser).
+
+A lista bruta abaixo contém duplicatas e algumas perguntas de outros produtos
+(Moto, Vida, Consórcio, Cartão Porto Bank, Bike, Pet, Casa pura,
+Financiamento puro não-auto, Investimentos) — todas filtradas no script
+`scripts/fetch_porto_faq.py`, que retém apenas as ~100 perguntas relevantes
+ao escopo Auto + DPVAT + FIPE + conceitos contratuais aplicáveis.
+
+---
+
+Como contratar o seguro auto da Porto?
+Como autorizo o débito junto ao Banco?
+Como contrato um seguro para minha frota?
+Como faço para contratar um serviço residencial além das minhas assistências?
+Como funciona a indenização para pessoas com deficiência?
+Como funciona o bônus no Porto Seguro Auto?
+Como funciona o carro reserva?
+Como funciona o desconto em estacionamentos da Rede Estapar?
+Como realizar o aviso e acompanhamento de sinistro do Seguro Auto?
+Como regularizo parcela vencida?
+Como renovar o Seguro Auto?
+Como solicitar o benefício de crédito em aplicativos de transporte ou desconto na franquia?
+Como solicito segunda via de boleto da minha apólice?
+Como solicito segunda via de boleto da minha apólice?
+O que devo fazer em caso de venda do veículo?
+O que é a Carta Verde?
+O que é franquia no Seguro Auto?
+O que é um endosso?
+Onde posso consultar a minha apólice?
+Onde posso encontrar os Centros Automotivos Porto?
+Posso alterar alguma garantia contratada do Porto Seguro Auto?
+Posso levar meu carro em uma oficina de minha confiança em caso de sinistro?
+Quais descontos eu posso ter no Seguro Auto da Porto?
+Quais fatores interferem no valor do meu Porto Seguro Auto?
+Quais os diferenciais do Porto Seguro Auto?
+Quais os locais de abrangência do Porto Seguro Auto?
+Qual o prazo para ocorrer a quitação da parcela, após o pagamento?
+Quando o cartão de crédito é cancelado ou vence e é emitido um novo cartão é necessário informar a seguradora?
+Quando tenho direito ao carro reserva?
+Cliente Porto Seguro tem desconto no aluguel de carros?
+O que é a Carta Verde?
+Posso alterar alguma garantia contratada do Porto Seguro Auto?
+O que devo fazer em caso de venda do veículo?
+Como contrato um seguro para minha frota?
+Quais as formas de pagamento da fatura do meu cartão de crédito?
+O que é o Empréstimo com Garantia de Veículo?
+Quais os diferenciais do Porto Seguro Auto?
+Como realizar o aviso e acompanhamento de sinistro do Seguro Auto?
+Posso contratar o seguro para vários carros da minha empresa?
+O que é e como funciona a cobertura de Lucros Cessantes?
+Como funciona o bônus no Porto Seguro Auto?
+Como funciona o Crédito Consignado da Porto Bank?
+Como funciona a indenização para pessoas com deficiência?
+Como é feita a liberação do veículo no final do contrato?
+Qual é a procedência dos veículos reaproveitados?
+Quais fatores interferem no valor do meu Porto Seguro Auto?
+Quais os locais de abrangência do Porto Seguro Auto?
+Quanto tempo demora para o cartão reconhecer meu pagamento?
+Realizei um pagamento parcial da fatura, como faço para pagar o restante?
+Como consultar o limite disponível para compras do meu cartão?
+Meu cartão foi perdido/roubado. O que devo fazer?
+Quais os benefícios do programa de relacionamento para quem tem o Cartão Porto Bank Empresarial?
+Realizei um pagamento parcial da fatura do Cartão Porto Bank Empresarial. Como faço para pagar o restante?
+Serviços de encanador
+Serviços de eletricista
+Qualquer empresa pode contratar o seguro Auto Frota, independentemente da atividade comercial?
+Como funciona o plano de assistência 24h no seguro Auto Frota?
+Como funciona o pagamento de despesas com médico, hospital ou dentista, se eu precisar usar mais de uma vez na mesma viagem?
+Como eu faço um financiamento de automóvel na Porto Seguro?
+Como conserto meu eletrodoméstico?
+Onde a Porto Seguro disponibiliza informações sobre baixa do gravame?
+A Porto Seguro compartilha meus dados com terceiros?
+O que é Financiamento + Seguro Auto?
+Quais são os veículos de aceitação para o Financiamento + Seguro Auto?
+Posso comprar carro de vendedor particular ou concessionária?
+O que é sinistro de veículo?
+Como fazer uma carta explicativa para seguro auto?
+Como funciona o sinistro de carros?
+Como consigo desconto no abastecimento com o app Porto?
+Qual a garantia de reparos em uma oficina referenciada?
+Posso pagar minha fatura com Pix?
+Como funciona o carro reserva?
+Onde posso consultar a minha apólice?
+O que é franquia no Seguro Auto?
+Como contratar o seguro auto da Porto?
+Quais descontos eu posso ter no Seguro Auto da Porto?
+Como renovar o Seguro Auto?
+Como solicitar um guincho para meu veículo?
+Como faço para contratar um serviço residencial além das minhas assistências?
+Onde posso encontrar os Centros Automotivos Porto?
+Como autorizo o débito junto ao Banco?
+Quando o cartão de crédito é cancelado ou vence e é emitido um novo cartão é necessário informar a seguradora?
+A Cobertura de Danos a Terceiros do Seguro Auto inclui a Cobertura de Danos Morais?
+A Cobertura de Danos a Terceiros prevê indenização a eventuais danos corporais que eu ou demais passageiros do veículo segurado sofram em um acidente?
+A cobertura do seguro de moto é válida para todo o território nacional?
+A franquia do Seguro Auto Sênior é mais barata que as demais?
+A frota segurada pelo Seguro Auto Pequenas Empresas possui um número limite de veículos?
+A partir de quantas cilindradas eu posso contratar o Porto Seguro Moto?
+A Porto Seguro avalia o veículo? Como isso acontece?
+A Porto Seguro Investimentos é um banco?
+Bati o meu carro e terei que pagar os danos causados ao outro veículo. Ele pode escolher a oficina?
+Caso quebre somente o vidro do meu carro, vou poder trocar o vidro, mesmo não sendo decorrente de roubo/furto ou acidente?
+Como aciono a minha franquia?
+Como contratar um seguro de moto?
+Como é feita a liberação do veiculo no final do contrato?
+Como faço para acompanhar o meu sinistro?
+Como fazer aviso e acompanhamento de sinistro em casos de terceiros?
+Como funciona o bônus no Seguro Auto?
+Como funciona o carro extra para o Seguro Auto Pequenas Empresas?
+Como funciona o carro reserva ou carro extra para o Seguro Auto Táxi?
+Como funciona o pagamento de franquia do Seguro Auto? Devo pagar antes de receber a indenização?
+Como funciona o seguro do carro no Carro Fácil?
+Como mudar o endereço de entrega da fatura?
+Como o aciono o Porto Seguro Moto se eu estiver em outro estado?
+Como posso adicionar um condutor adicional?
+Como posso agendar serviços como reparos residenciais, consertos de eletrodomésticos ou serviços de help desk?
+Como posso consultar os benefícios de minha apólice Auto Premium?
+Como posso contratar o Porto Seguro Auto Premium?
+Como posso obter descontos em estacionamentos?
+Como solicitar um guincho?
+Como solicitar uma proposta de seguro?
+Como visualizar o Manual do Segurado?
+Contratando a Cobertura Compreensiva (colisão, incêndio, roubo e furto), estou coberto em caso de enchente?
+Dirijo um táxi, mas não sou o dono do veículo. Posso contratar o Seguro Auto Táxi em meu nome?
+Durante a vigência de meu Seguro Auto, posso alterar, incluir ou excluir alguma garantia contratada?
+Em quanto tempo eu recebo minha indenização do Seguro Auto?
+Há profissões que não são aceitas no Vida Mais Simples?
+Meu carro é 0km. Se ocorrer um acidente com Indenização Integral por colisão, roubo ou furto, receberei indenização referente a um carro 0km?
+Meu filho jovem ganhou um carro, existe um seguro especial para ele?
+Meu Seguro Auto é cancelado depois que recebo a indenização por perda total?
+Minha moto é personalizada. Como é feito o contrato do seguro?
+Minha moto quebrou, como devo proceder?
+Motoristas sem ponto na carteira têm desconto no Seguro Moto?
+No Carro Fácil, caso fique sem carro devido à manutenção ou sinistro, receberei outro carro?
+No Carro Fácil, o preço é fixo ou haverá variação a cada novo contrato?
+No Carro Fácil, onde retiro o veículo?
+No Carro Fácil, posso renovar o contrato e ficar com o mesmo carro?
+No Carro Fácil, posso ter mais de um carro contratado em meu nome?
+No caso de venda do veículo, o seguro é válido para o novo proprietário?
+O imóvel é avaliado? Como isso acontece?
+O meu veículo é blindado. Como posso informar?
+O pagamento do Crédito ou Financiamento pode ser em débito automático?
+O Porto Seguro Carro + Casa contempla quais serviços?
+O Porto Seguro Moto oferece seguro para motos a partir de quantas cilindradas?
+O que é considerado modificação de risco no seguro Vida Mais Simples?
+O que é DPVAT?
+O que é Financiamento 2 em 1?
+O que é lance diluído?
+O que é o curso de Direção Emocional?
+O que é o curso de Direção Segura?
+O que é o serviço de Cartório Volante?
+O que é tabela FIPE? Onde posso encontrá-la?
+O que o seguro DPVAT cobre?
+O seguro da Porto está em nome de meu pai/mãe/cônjuge, posso fazer o financiamento em meu nome usando a taxa para segurado?
+Onde posso encontrar informações sobre serviços e benefícios para o pet?
+Optei por pagar o seguro do meu veículo em várias parcelas. O que acontece quando deixo de pagar?
+Os Centros Automotivos Porto oferecem serviços gratuitos para segurados Seguro Auto da Porto Seguro?
+Pago o Auto Mensal. O que acontece se trocar de carro durante a vigência da apólice?
+Paguei menos da metade do seguro e meu carro foi furtado. Receberei a indenização integral?
+Perco a apólice se utilizar o guincho?
+Por que minha compra não foi autorizada?
+Posso antecipar parcelas através do autosserviço ou é preciso ligar para a central de atendimento?
+Posso aumentar ou diminuir o valor da minha franquia do Seguro Auto?
+Posso contratar o Seguro Auto Pequenas Empresas em nome de pessoa física?
+Posso contratar somente a Cobertura de Danos a Terceiros para Seguro Auto?
+Posso incluir as faturas do meu Cartão Porto Bank em débito automático?
+Posso oferecer o guincho ao terceiro envolvido em um acidente?
+Posso transferir o consórcio? Como fazer?
+Posso usufruir de pacotes de serviços gratuitos?
+Posso utilizar parte do crédito como lance? Como?
+Quais as formas de pagamento dos prêmios no seguro Vida Mais Simples?
+Quais documentos devo enviar para análise de Financiamento - Pessoa Jurídica?
+Quais opções existem para a compra de automóveis?
+Quais os diferenciais do Seguro Auto Mulher?
+Quais os diferenciais do Seguro Auto Pequenas Empresas?
+Quais os diferenciais do Seguro Auto Sênior?
+Quais os diferenciais do Seguro Auto Táxi?
+Quais os diferenciais do Seguro Caminhão?
+Quais os documentos necessários para regulação de sinistro do Porto Seguro Moto?
+Quais os locais de cobertura do seguro do veículo?
+Quais são as coberturas para a minha moto?
+Quais são as vantagens para segurados do Seguro Auto Pequenas Empresas?
+Quais são as vantagens para segurados do Seguro Auto Táxi?
+Quais são as vantagens para segurados do Seguro Caminhão?
+Quais são os tipos de serviços emergenciais?
+Qual a importância da reciclagem automotiva no Brasil?
+Qual a vigência do seguro Vida Mais Simples e como ele é renovado?
+Qual é o valor mínimo para contratação da Cobertura de Danos a Terceiros do Seguro Auto?
+Qual o índice de correção de parcelas do Consórcio? E em que periodicidade ocorrem os reajustes?
+Quando a franquia do Seguro Auto será aplicada?
+Quando eu ficarei isento do pagamento da franquia do Seguro Auto?
+Quem participa do curso de Direção Segura e Direção Emocional tem desconto no Porto Seguro Auto?
+Quem pode receber o crédito nos financiamentos de auto?
+Se eu decidir trocar de veículo, será necessário cancelar o seguro atual e fazer um novo?
+Se roubarem apenas o rádio do meu veículo, estou coberto?
+Serviço Despachante
+O que é a taxa de administração do consórcio?
+Como funciona o consórcio de imóveis?
+Como fazer um consórcio de moto?
+Como funciona o consórcio de automóveis?
+Como posso utilizar minha carta de crédito de automóveis?
+Como funciona o consórcio de veículos pesados?
+Onde consigo informações sobre Serviços para Casa e Auto?
+Como contratar Serviços para Casa e Auto?
+Quais são as formas de pagamento dos Serviços para Casa e Auto?
+Como tenho atendimento para Serviços para Casa e Auto?
+Clientes Cartão Empresarial Porto Bank têm desconto em serviços?
+Quais são os Serviços para Casa e Auto disponíveis?
+Como contratar um serviço para casa e auto?
+É preciso ser cliente Porto Seguro para comprar Serviços para Casa e Auto?
+Cliente Cartão de Crédito Porto Bank tem vantagem ao contratar Serviços para Casa e Auto?
+Quais as vantagens em contratar os Serviços para Casa e Auto?
+Quais são as formas de pagamento aceitas no Seguro Bike da Porto Seguro?

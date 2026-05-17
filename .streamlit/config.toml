@@ -1,0 +1,24 @@
+# Configuração do Streamlit pro projeto InsurMind.
+#
+# Por que existe:
+# Sem esta config, o file watcher do Streamlit (pra hot-reload) tenta importar
+# TODOS os submódulos das libs no `.venv/`, incluindo submódulos de visão
+# computacional do `transformers` (VITPose, YOLOS, ZoeDepth) que exigem
+# `torchvision`. Como a gente NÃO usa visão (só embeddings de texto), esses
+# imports falham e poluem o terminal com tracebacks.
+#
+# `folderWatchBlacklist` faz o watcher ignorar essas pastas inteiramente.
+
+[server]
+# Ignora libs (não monitora mudanças nelas — hot-reload continua funcionando
+# pro código do projeto em src/ e scripts/).
+folderWatchBlacklist = [".venv", "node_modules", ".chroma"]
+
+# Não envia telemetria de uso pro Streamlit.
+[browser]
+gatherUsageStats = false
+
+# Tema light (mais legível pra apresentação à banca).
+[theme]
+base = "light"
+primaryColor = "#0066CC"
