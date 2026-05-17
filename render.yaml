@@ -26,9 +26,11 @@ services:
       pip install -e .
       python scripts/ingest_kb.py
 
-    # START: uvicorn ouvindo na porta que o Render injeta via $PORT.
+    # START: uvicorn via `python -m` (mais robusto que depender do binário
+    # `uvicorn` estar no PATH — funciona com qualquer install do pacote).
     # --host 0.0.0.0 é obrigatório (sem isso o serviço não recebe tráfego externo).
-    startCommand: uvicorn insurmind.api:app --host 0.0.0.0 --port $PORT
+    # --log-level info dá visibilidade do binding pra debug do Render.
+    startCommand: python -m uvicorn insurmind.api:app --host 0.0.0.0 --port $PORT --log-level info
 
     # Healthcheck pro Render saber quando o serviço subiu e quando recuperar
     # após sleep. /api/health responde 200 com JSON {status:"ok", provider, tools_count}.
@@ -41,6 +43,12 @@ services:
       # versão de Python vai como env var, não como campo do serviço.
       - key: PYTHON_VERSION
         value: "3.12.7"
+
+      # Força Python a não bufferizar stdout — essencial pra ver logs em
+      # tempo real no Render (default buffered esconde startup do uvicorn
+      # até o buffer encher, dando impressão de "travado" no Render).
+      - key: PYTHONUNBUFFERED
+        value: "1"
 
       - key: INSURMIND_LLM
         value: anthropic_api
