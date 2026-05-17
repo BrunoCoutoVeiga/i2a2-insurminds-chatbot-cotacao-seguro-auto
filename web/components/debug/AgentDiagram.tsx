@@ -292,12 +292,14 @@ export function AgentDiagram({ events, stepIndex }: Props) {
       make(EDGE.RETRIEVE_KB, NODE.RETRIEVE, NODE.KB, COLOR.KB),
       {
         // Agent → User (resposta final) — só visível quando ativa
-        // Sai pela esquerda do Agent (handle "to-user"), entra na direita do User
+        // Sai pela esquerda do Agent (handle "to-user"), entra na direita do User.
+        // Sem `type` explícito: usa o default (bezier suave). React Flow v12
+        // removeu o tipo legacy "bezier" — agora seria "simplebezier", mas o
+        // default já desenha curva bezier então não precisamos especificar.
         id: EDGE.AGENT_USER,
         source: NODE.AGENT,
         target: NODE.USER,
         sourceHandle: "to-user",
-        type: "bezier",
         animated: activeEdges.has(EDGE.AGENT_USER),
         style: {
           stroke: activeEdges.has(EDGE.AGENT_USER) ? COLOR.AGENT : "transparent",
