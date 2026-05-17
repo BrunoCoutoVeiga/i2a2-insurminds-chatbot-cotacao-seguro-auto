@@ -21,6 +21,7 @@ se a collection já existe (útil quando mudou o conteúdo da KB).
 from __future__ import annotations
 
 import argparse
+import os
 import re
 from pathlib import Path
 
@@ -31,7 +32,9 @@ from sentence_transformers import SentenceTransformer
 
 CHROMA_DIR = Path(".chroma")
 COLLECTION_NAME = "insurmind_kb"
-EMBED_MODEL_NAME = "intfloat/multilingual-e5-base"
+# Modelo controlável via env pra trocar consistentemente entre build e runtime
+# (rag.py também lê INSURMIND_EMBED_MODEL). Default e5-base.
+EMBED_MODEL_NAME = os.environ.get("INSURMIND_EMBED_MODEL", "intfloat/multilingual-e5-base")
 
 # Tamanho-alvo de chunk (caracteres). E5-base aceita ~512 tokens (~2000 chars);
 # usamos ~1500 chars (margem) com overlap pra cobrir bordas.

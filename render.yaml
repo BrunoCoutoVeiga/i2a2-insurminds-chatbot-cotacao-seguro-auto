@@ -56,6 +56,13 @@ services:
       - key: INSURMIND_LOG_LEVEL
         value: INFO
 
+      # Modelo de embedding menor pra caber nos 512MB RAM do free tier.
+      # e5-base (~1GB em float32) estoura; e5-small (~500MB) cabe.
+      # Trocar pra e5-base se subir pro plano Standard (2GB RAM).
+      # Build (ingest_kb.py) e runtime (rag.py) leem essa mesma var.
+      - key: INSURMIND_EMBED_MODEL
+        value: intfloat/multilingual-e5-small
+
       # ⚠️ SECRET — preencher no dashboard do Render após o serviço ser criado.
       # Pega em https://console.anthropic.com/settings/keys
       - key: ANTHROPIC_API_KEY

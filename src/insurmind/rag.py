@@ -19,16 +19,27 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import chromadb
-from sentence_transformers import SentenceTransformer
+# Imports pesados (sentence-transformers ~50MB, chromadb ~30MB) ficam LAZY
+# dentro de _get_model() e _get_collection(). Razão: o `python -m uvicorn`
+# precisa subir RÁPIDO pro Render passar no healthcheck inicial (timeout
+# de 5min). Carregamento do modelo e5 (~500MB em RAM) só rola quando a
+# primeira pergunta com retrieve_kb chega — aceitamos cold start de
+# 30-60s na 1ª query em troca de healthcheck passar instantaneamente.
+if TYPE_CHECKING:
+    import chromadb
+    from sentence_transformers import SentenceTransformer
 
 CHROMA_DIR = Path('.chroma')
 COLLECTION_NAME = 'insurmind_kb'
-EMBED_MODEL_NAME = 'intfloat/multilingual-e5-base'
+# Modelo default. Sobrescrevível via env INSURMIND_EMBED_MODEL pra trocar
+# em deploy sem mudar código (ex.: e5-small caso o free tier de RAM aperte).
+EMBED_MODEL_NAME = os.environ.get('INSURMIND_EMBED_MODEL', 'intfloat/multilingual-e5-base')
 
 # Limiar empírico (distância L2 em e5-base normalizado). Acima disso = fraco.
 #
@@ -61,21 +72,31 @@ class Chunk:
     page: int | None = None
 
 
-# Singletons lazy-loaded (custo de boot do modelo ~3s; só uma vez por processo)
-_model: SentenceTransformer | None = None
-_collection: chromadb.Collection | None = None
+# Singletons lazy-loaded (custo de boot do modelo ~3s; só uma vez por processo).
+# Tipados como `object | None` em vez de SentenceTransformer | None pra evitar
+# import no escopo do módulo — vide bloco TYPE_CHECKING acima.
+_model: object | None = None
+_collection: object | None = None
 
 
-def _get_model() -> SentenceTransformer:
+def _get_model():
+    """Carrega o modelo e5 lazy. Primeira chamada custa ~3-30s dependendo
+    do hardware; chamadas subsequentes retornam o cached singleton."""
     global _model
     if _model is None:
+        from sentence_transformers import SentenceTransformer
+        logger.info("Carregando modelo de embedding '%s'...", EMBED_MODEL_NAME)
         _model = SentenceTransformer(EMBED_MODEL_NAME)
+        logger.info("Modelo carregado.")
     return _model
 
 
-def _get_collection() -> chromadb.Collection:
+def _get_collection():
+    """Conecta ao ChromaDB lazy. Primeira chamada lê .chroma/ do disco."""
     global _collection
     if _collection is None:
+        import chromadb
+        logger.info("Conectando ao ChromaDB em '%s'...", CHROMA_DIR)
         client = chromadb.PersistentClient(path=str(CHROMA_DIR))
         try:
             _collection = client.get_collection(COLLECTION_NAME)
@@ -85,6 +106,7 @@ def _get_collection() -> chromadb.Collection:
                 f'Rode `python scripts/ingest_kb.py` primeiro. '
                 f'(detalhe: {e})'
             )
+        logger.info("ChromaDB conectado.")
     return _collection
 
 
