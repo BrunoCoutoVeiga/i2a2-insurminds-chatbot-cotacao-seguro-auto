@@ -29,9 +29,9 @@ const NODE = {
   USER: "user",
   AGENT: "agent",
   LLM: "llm",
-  RETRIEVE: "tool-retrieve_kb",
-  QUOTE: "tool-compute_quote_mock",
-  ESCALATE: "tool-escalar_humano",
+  RETRIEVE: "tool-consultar",
+  QUOTE: "tool-cotar",
+  ESCALATE: "tool-encaminhar",
   KB: "kb",
 } as const;
 
@@ -66,6 +66,13 @@ function normalizeToolName(name: string): string | null {
 function toolNodeId(toolName: string): string | null {
   const clean = normalizeToolName(toolName);
   if (!clean) return null;
+  // Backend tool names (atualizados em 2026-05-18 pra remover info disclosure
+  // — ver RELATORIO.md sessão "Hardening anti-prompt-injection").
+  if (clean === "consultar_porto_inseguro") return NODE.RETRIEVE;
+  if (clean === "cotar_seguro_auto") return NODE.QUOTE;
+  if (clean === "encaminhar_atendimento") return NODE.ESCALATE;
+  // Compat: aceita também os nomes antigos (caso versão antiga do backend
+  // ainda esteja rodando — debug ainda funciona).
   if (clean === "retrieve_kb") return NODE.RETRIEVE;
   if (clean === "compute_quote_mock") return NODE.QUOTE;
   if (clean === "escalar_humano") return NODE.ESCALATE;
@@ -242,7 +249,8 @@ export function AgentDiagram({ events, stepIndex }: Props) {
     ]);
     if (!ragSteps.has(currentEvent.type)) return false;
     const name = normalizeToolName(String(currentEvent.payload?.name ?? ""));
-    return name === "retrieve_kb";
+    // Aceita nome novo + compat com antigo (versão pré-2026-05-18).
+    return name === "consultar_porto_inseguro" || name === "retrieve_kb";
   }, [currentEvent]);
 
   const nodes: Node[] = useMemo(
@@ -295,21 +303,21 @@ export function AgentDiagram({ events, stepIndex }: Props) {
         id: NODE.RETRIEVE,
         type: "tool",
         position: { x: 430, y: 130 },
-        data: { label: "🔍 retrieve_kb" },
+        data: { label: "🔍 Consultar base" },
         style: nodeStyle(activeNodes.has(NODE.RETRIEVE), COLOR.TOOL),
       },
       {
         id: NODE.QUOTE,
         type: "tool",
         position: { x: 430, y: 200 },
-        data: { label: "💰 compute_quote" },
+        data: { label: "💰 Cotar seguro" },
         style: nodeStyle(activeNodes.has(NODE.QUOTE), COLOR.TOOL),
       },
       {
         id: NODE.ESCALATE,
         type: "tool",
         position: { x: 430, y: 270 },
-        data: { label: "📞 escalar_humano" },
+        data: { label: "📞 Atendimento humano" },
         style: nodeStyle(activeNodes.has(NODE.ESCALATE), COLOR.TOOL),
       },
       {

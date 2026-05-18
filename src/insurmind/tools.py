@@ -41,12 +41,12 @@ _RETRIEVE_KB_SCHEMA = {
 }
 
 
-async def _handler_retrieve_kb(args: dict) -> dict:
+async def _handler_consultar_porto_inseguro(args: dict) -> dict:
     consulta = args["consulta"]
-    logger.info("TOOL retrieve_kb invocada pela LLM com consulta=%r", consulta)
+    logger.info("TOOL consultar_porto_inseguro invocada pela LLM com consulta=%r", consulta)
     chunks = await retrieve_kb(consulta, k=5)
     if not chunks:
-        logger.warning("TOOL retrieve_kb: 0 chunks retornados")
+        logger.warning("TOOL consultar_porto_inseguro: 0 chunks retornados")
         return {"text": "Nenhum trecho relevante encontrado na base de conhecimento."}
 
     parts: list[str] = [f"Trechos relevantes para a consulta: {consulta!r}\n"]
@@ -62,23 +62,28 @@ async def _handler_retrieve_kb(args: dict) -> dict:
     )
     result_text = "".join(parts)
     logger.info(
-        "TOOL retrieve_kb devolvendo: %d chunks, %d chars de texto pra LLM",
+        "TOOL consultar_porto_inseguro devolvendo: %d chunks, %d chars de texto pra LLM",
         len(chunks), len(result_text),
     )
     return {"text": result_text}
 
 
-retrieve_kb_tool = Tool(
-    name="retrieve_kb",
+# Nome neutro/genérico (sem revelar "kb"/"retrieve"/arquitetura interna).
+# Descrição foca no comportamento funcional sem mencionar:
+# - InsurMind (nome do sistema interno)
+# - SUSEP/FENACOR (fallback — implementação)
+# - "tieirizado"/"vetorial" (arquitetura)
+# A LLM ainda recebe trechos com `Fonte:` label, então cita fontes na resposta.
+consultar_porto_inseguro_tool = Tool(
+    name="consultar_porto_inseguro",
     description=(
-        "Busca trechos relevantes na base de conhecimento do InsurMind — Condições "
-        "Gerais e FAQ da Porto Inseguro (primárias), com fallback automático para "
-        "glossários SUSEP e FENACOR quando a Porto não tem a informação. Use SEMPRE "
+        "Busca informações oficiais sobre seguro auto Porto Inseguro. Use SEMPRE "
         "antes de afirmar qualquer fato sobre coberturas, franquias, sinistro, "
-        "regras de apólice, glossário ou conceitos de seguro auto."
+        "regras de apólice, glossário ou conceitos de seguro auto. Nunca invente — "
+        "se não houver fontes relevantes, encaminhe pra atendimento humano."
     ),
     parameters_schema=_RETRIEVE_KB_SCHEMA,
-    handler=_handler_retrieve_kb,
+    handler=_handler_consultar_porto_inseguro,
 )
 
 
@@ -111,16 +116,16 @@ _COMPUTE_QUOTE_SCHEMA = {
 }
 
 
-async def _handler_compute_quote(args: dict) -> dict:
+async def _handler_cotar_seguro_auto(args: dict) -> dict:
     logger.info(
-        "TOOL compute_quote_mock invocada: %s %s %s, CEP=%s, cobertura=%s",
+        "TOOL cotar_seguro_auto invocada: %s %s %s, CEP=%s, cobertura=%s",
         args.get("modelo"), args.get("versao"), args.get("ano"),
         args.get("cep_pernoite"), args.get("tipo_cobertura"),
     )
     qin = QuoteInput(**args)
     opcoes = compute_quote_mock(qin)
     logger.info(
-        "TOOL compute_quote_mock devolvendo 3 opções: %s",
+        "TOOL cotar_seguro_auto devolvendo 3 opções: %s",
         ", ".join(f"{o.nivel_franquia}=R${o.premio_anual:,.2f}" for o in opcoes),
     )
 
@@ -151,18 +156,23 @@ async def _handler_compute_quote(args: dict) -> dict:
     return {"text": "".join(parts)}
 
 
-compute_quote_mock_tool = Tool(
-    name="compute_quote_mock",
+# Nome neutro: remove "_mock" do nome (que delatava simulação ao usuário se
+# vazado via meta-pergunta). Descrição não menciona "mock didático" ou
+# "especificação da Adriele" — só comportamento funcional.
+# IMPORTANTE: o disclaimer "Valores simulados pra fins acadêmicos" CONTINUA
+# aparecendo na RESPOSTA ao usuário (transparência exigida pelo projeto) —
+# o que mudou é o que a LLM vê na descrição da tool, não a resposta final.
+cotar_seguro_auto_tool = Tool(
+    name="cotar_seguro_auto",
     description=(
-        "Calcula uma cotação SIMULADA (mock didático) de seguro auto Porto Inseguro. "
-        "Devolve 3 opções de franquia (reduzida/normal/aumentada) — todas no tipo de "
-        "cobertura escolhido pelo usuário. Exige TODOS os 13 campos preenchidos antes "
-        "de chamar — pergunte ao usuário o que estiver faltando. Os campos seguem a "
-        "especificação da Adriele (especialista do grupo). A resposta inclui o "
-        "disclaimer obrigatório de simulação didática."
+        "Calcula uma cotação de seguro auto Porto Inseguro. Devolve 3 opções "
+        "variando a franquia (reduzida, normal e aumentada) — todas no tipo de "
+        "cobertura escolhido pelo usuário. Antes de chamar, colete TODOS os 13 "
+        "campos abaixo conversando naturalmente com o usuário (NÃO liste os "
+        "nomes técnicos dos campos pra ele). Se algum estiver faltando, pergunte."
     ),
     parameters_schema=_COMPUTE_QUOTE_SCHEMA,
-    handler=_handler_compute_quote,
+    handler=_handler_cotar_seguro_auto,
 )
 
 
@@ -186,9 +196,9 @@ _ESCALAR_HUMANO_SCHEMA = {
 }
 
 
-async def _handler_escalar_humano(args: dict) -> dict:
+async def _handler_encaminhar_atendimento(args: dict) -> dict:
     motivo = args.get("motivo", "(motivo não informado)")
-    logger.info("TOOL escalar_humano invocada: motivo=%r", motivo)
+    logger.info("TOOL encaminhar_atendimento invocada: motivo=%r", motivo)
     text = (
         f"Encaminhamento ao atendimento humano. Motivo: {motivo}\n\n"
         "Mensagem padrão a apresentar ao usuário:\n\n"
@@ -204,18 +214,19 @@ async def _handler_escalar_humano(args: dict) -> dict:
     return {"text": text}
 
 
-escalar_humano_tool = Tool(
-    name="escalar_humano",
+encaminhar_atendimento_tool = Tool(
+    name="encaminhar_atendimento",
     description=(
-        "Use quando o pedido do usuário for sobre OUTRO produto de seguros (vida, "
-        "residencial, frota grande, saúde, viagem) OU exigir ação de humano (alterar "
-        "apólice real, aprovar reembolso, cancelar contrato, registrar reclamação "
-        "formal). NÃO use para perguntas fora do domínio de seguros (história, clima, "
-        "código, opinião) — para essas, responda direto que você não trata o tema, "
-        "sem chamar tool nenhuma."
+        "Encaminha o usuário pro atendimento humano da Porto Inseguro. Use quando "
+        "o pedido for sobre OUTRO produto (vida, residencial, frota, saúde, viagem, "
+        "náutico, pet, moto, previdência) OU exigir ação que só humano pode fazer "
+        "(alterar apólice, aprovar reembolso, cancelar contrato, registrar "
+        "reclamação formal). NÃO use pra perguntas fora do domínio de seguros "
+        "(história, clima, código, opinião) — pra essas, responda direto que você "
+        "não trata o tema, sem chamar tool."
     ),
     parameters_schema=_ESCALAR_HUMANO_SCHEMA,
-    handler=_handler_escalar_humano,
+    handler=_handler_encaminhar_atendimento,
 )
 
 
@@ -224,7 +235,7 @@ escalar_humano_tool = Tool(
 # =============================================================================
 
 ALL_TOOLS: list[Tool] = [
-    retrieve_kb_tool,
-    compute_quote_mock_tool,
-    escalar_humano_tool,
+    consultar_porto_inseguro_tool,
+    cotar_seguro_auto_tool,
+    encaminhar_atendimento_tool,
 ]
