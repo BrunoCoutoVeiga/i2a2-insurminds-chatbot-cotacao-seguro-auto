@@ -155,4 +155,4 @@ Após o aviso, a Porto abre o processo de regulação do sinistro — análise d
 - **DPVAT** — obrigatório, federal, cobre PESSOAS feridas/falecidas em acidentes (qualquer veículo)
 - **Seguro auto Porto Inseguro** — opcional, cobre o VEÍCULO (colisão, roubo, etc.) e responsabilidade civil contra TERCEIROS
 
-Ambos coexistem. O DPVAT cobre só danos pessoais com limites baixos; o seguro auto Porto cobre os danos materiais ao veículo e responsabilidade civil ampliada.
+Ambos coexistem. O DPVAT cobre só danos pessoais com limites baixos; o seguro auto Porto Inseguro cobre os danos materiais ao veículo e responsabilidade civil ampliada.

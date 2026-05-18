@@ -224,7 +224,7 @@ _Fonte:_ [portoinseguro.com.br/faqs/como-funciona-o-pagamento-de-franquia-do-seg
 
 ### Como solicitar o benefício de crédito em aplicativos de transporte ou desconto na franquia?
 
-Para escolher qualquer um dos benefícios é necessário manter contato com a nossa central de atendimento de Sinistro e informar a opção escolhida. Telefones: 4004 76786 Capitais e regiões metropolitanas ou 0300 0000-0001 para Demais localidades.
+Para escolher qualquer um dos benefícios é necessário manter contato com a nossa central de atendimento de Sinistro e informar a opção escolhida. Telefones: (11) 0000-0005 Capitais e regiões metropolitanas ou 0300 0000-0001 para Demais localidades.
 
 _Fonte:_ [portoinseguro.com.br/faqs/como-solicitar-o-beneficio-de-credito-em-aplicativos-de-transporte-ou-desconto-na-franquia](https://www.portoinseguro.com.br/faqs/como-solicitar-o-beneficio-de-credito-em-aplicativos-de-transporte-ou-desconto-na-franquia)
 
@@ -454,7 +454,7 @@ _Fonte:_ [portoinseguro.com.br/faqs/como-posso-obter-descontos-em-estacionamento
 
 ### Como solicitar um guincho?
 
-Aplicativo Porto Inseguro Auto Baixe o aplicativo Porto Inseguro Auto pela Play Store ou pela Apple Store. Efetue login com seus dados de acesso do Portal do Cliente. Caso não tenha acesso, preencha seus dados na opção “cadastre-se”. Clique na opção “solicitar socorro”, disponível na parte inferior da tela. Preencha as informações solicitadas (tipo de serviço, localização, endereço de destino, referência do veículo, pontos de referência e telefone do local onde está o veículo). Pronto! O seu guincho já está a caminho. SOS Porto Inseguro Auto Acesse o SOS Porto Inseguro, preencha as informações solicitadas (placa do veículo e CPF/CNPJ), confirme o endereço que precisa do guincho, e pronto! Já estaremos a caminho. Atendimento telefônico 333-PORTO - (O mesmo que 3337-6786) Grande São Paulo e Grande Rio. 4004-PORTO - (O mesmo que 4004-76786) Capitais e Grandes Centros 0800-727-0800 - (Demais localidades)
+Aplicativo Porto Inseguro Auto Baixe o aplicativo Porto Inseguro Auto pela Play Store ou pela Apple Store. Efetue login com seus dados de acesso do Portal do Cliente. Caso não tenha acesso, preencha seus dados na opção “cadastre-se”. Clique na opção “solicitar socorro”, disponível na parte inferior da tela. Preencha as informações solicitadas (tipo de serviço, localização, endereço de destino, referência do veículo, pontos de referência e telefone do local onde está o veículo). Pronto! O seu guincho já está a caminho. SOS Porto Inseguro Auto Acesse o SOS Porto Inseguro, preencha as informações solicitadas (placa do veículo e CPF/CNPJ), confirme o endereço que precisa do guincho, e pronto! Já estaremos a caminho. Atendimento telefônico (11) 0000-0006 - (O mesmo que (11) 0000-0006) Grande São Paulo e Grande Rio. (11) 0000-0005 - (O mesmo que (11) 0000-0005) Capitais e Grandes Centros 0800 0000-0007 - (Demais localidades)
 
 _Fonte:_ [portoinseguro.com.br/faqs/como-solicitar-um-guincho](https://www.portoinseguro.com.br/faqs/como-solicitar-um-guincho)
 
@@ -490,7 +490,7 @@ _Fonte:_ [portoinseguro.com.br/faqs/perco-a-apolice-se-utilizar-o-guincho](https
 
 ### Posso oferecer o guincho ao terceiro envolvido em um acidente?
 
-Sim, desde que o condutor do veículo segurado seja o culpado pelo acidente e assuma a responsabilidade para a Seguradora, poderá solicitar um guincho para atender o terceiro acionando a Central 24h pelo 333-PORTO.
+Sim, desde que o condutor do veículo segurado seja o culpado pelo acidente e assuma a responsabilidade para a Seguradora, poderá solicitar um guincho para atender o terceiro acionando a Central 24h pelo (11) 0000-0006.
 
 _Fonte:_ [portoinseguro.com.br/faqs/posso-oferecer-o-guincho-ao-terceiro-envolvido-em-um-acidente](https://www.portoinseguro.com.br/faqs/posso-oferecer-o-guincho-ao-terceiro-envolvido-em-um-acidente)
 
@@ -518,13 +518,13 @@ _11 perguntas_
 
 ### Como autorizo o débito junto ao Banco?
 
-Primeiramente, verifique junto ao seu Banco se para ocorrer o débito automático é necessário autorização. Caso positivo, realize o procedimento pelo site ou aplicativo do Banco. Caso ainda tenha dúvidas, entre contato pelo nosso WhatsApp (11) 0000-0001 Central Financeiro: (11) 0000-0002 Telefone: 4004-76786 (Capitais e regiões metropolitanas) 0300 0000-0001 (Demais localidades)
+Primeiramente, verifique junto ao seu Banco se para ocorrer o débito automático é necessário autorização. Caso positivo, realize o procedimento pelo site ou aplicativo do Banco. Caso ainda tenha dúvidas, entre contato pelo nosso WhatsApp (11) 0000-0001 Central Financeiro: (11) 0000-0002 Telefone: (11) 0000-0005 (Capitais e regiões metropolitanas) 0300 0000-0001 (Demais localidades)
 
 _Fonte:_ [portoinseguro.com.br/faqs/como-autorizo-o-debito-junto-ao-banco](https://www.portoinseguro.com.br/faqs/como-autorizo-o-debito-junto-ao-banco)
 
 ### Como mudar o endereço de entrega da fatura?
 
-Se você contratou os serviços de Previdência, Seguro Auto, Seguro Empresa, Seguro Residência e Vida Prêmio, pode acessar o Portal do Cliente e preencher os seus novos dados. Para Consórcio, é possível acessando o Portal do Cliente. Caminho: Cartão de Crédito > Alterações > Dados Cadastrais. Para Cartão, ligue para a Central de Relacionamento: 4004-3600 - (Capitais e Regiões Metropolitanas) ou 0800 0000-0006 (Demais localidades). Para os demais produtos, entre em contato com o seu corretor.
+Se você contratou os serviços de Previdência, Seguro Auto, Seguro Empresa, Seguro Residência e Vida Prêmio, pode acessar o Portal do Cliente e preencher os seus novos dados. Para Consórcio, é possível acessando o Portal do Cliente. Caminho: Cartão de Crédito > Alterações > Dados Cadastrais. Para Cartão, ligue para a Central de Relacionamento: (11) 0000-0005 - (Capitais e Regiões Metropolitanas) ou 0800 0000-0006 (Demais localidades). Para os demais produtos, entre em contato com o seu corretor.
 
 _Fonte:_ [portoinseguro.com.br/faqs/como-mudar-o-endereco-de-entrega-da-fatura](https://www.portoinseguro.com.br/faqs/como-mudar-o-endereco-de-entrega-da-fatura)
 
@@ -566,7 +566,7 @@ _Fonte:_ [portoinseguro.com.br/faqs/pago-o-auto-mensal-o-que-acontece-se-trocar-
 
 ### Posso antecipar parcelas através do autosserviço ou é preciso ligar para a central de atendimento?
 
-Sim, é possivel pelo telefone de atendimento 4004-5215 - (Para todo o Brasil).
+Sim, é possivel pelo telefone de atendimento (11) 0000-0005 - (Para todo o Brasil).
 
 _Fonte:_ [portoinseguro.com.br/faqs/posso-antecipar-parcelas-atraves-do-autosservico-ou-e-preciso-ligar-para-a-central-de-atendimento](https://www.portoinseguro.com.br/faqs/posso-antecipar-parcelas-atraves-do-autosservico-ou-e-preciso-ligar-para-a-central-de-atendimento)
 
@@ -578,7 +578,7 @@ _Fonte:_ [portoinseguro.com.br/faqs/posso-pagar-minha-fatura-com-pix](https://ww
 
 ### Quando o cartão de crédito é cancelado ou vence e é emitido um novo cartão é necessário informar a seguradora?
 
-Primeiramente, verifique junto ao seu Banco é necessário alguma autorização para o débito automático. Caso positivo, realize o procedimento pelo site ou aplicativo do Banco. Caso ainda tenha dúvidas, entre contato pelo nosso WhatsApp (11) 0000-0001 Demais canais de atendimento: Central Financeiro: (11) 0000-0002 Telefone: 4004-76786 (Capitais e regiões metropolitanas) 0300 0000-0001 (Demais localidades)
+Primeiramente, verifique junto ao seu Banco é necessário alguma autorização para o débito automático. Caso positivo, realize o procedimento pelo site ou aplicativo do Banco. Caso ainda tenha dúvidas, entre contato pelo nosso WhatsApp (11) 0000-0001 Demais canais de atendimento: Central Financeiro: (11) 0000-0002 Telefone: (11) 0000-0005 (Capitais e regiões metropolitanas) 0300 0000-0001 (Demais localidades)
 
 _Fonte:_ [portoinseguro.com.br/faqs/quando-o-cartao-de-credito-e-cancelado-ou-vence-e-e-emitido-um-novo-cartao-e-necessario-informar-a-seguradora](https://www.portoinseguro.com.br/faqs/quando-o-cartao-de-credito-e-cancelado-ou-vence-e-e-emitido-um-novo-cartao-e-necessario-informar-a-seguradora)
 

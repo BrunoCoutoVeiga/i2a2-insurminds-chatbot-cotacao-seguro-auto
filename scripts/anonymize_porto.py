@@ -68,21 +68,37 @@ PHONE_REPLACEMENTS = [
     (r'\(?11\)?\s+3366[\s\-]?3645', '(11) 0000-0002'),
     (r'\(?11\)?\s+3366[\s\-]?3330', '(11) 0000-0003'),
     (r'\(?11\)?\s+3366[\s\-]?3377', '(11) 0000-0004'),
-    # Capitais e grandes centros (variantes de "(11) 4004-XXXX" e "11 4004-XXXX")
-    (r'\(?11\)?\s+4004[\s\-]?767[68]', '(11) 0000-0005'),
-    (r'\(?11\)?\s+333[\s\-]?76786', '(11) 0000-0006'),
-    # Centrais 0300
-    (r'0300\s*33\s*76786', '0300 0000-0001'),
-    (r'0300\s*33\s*7676', '0300 0000-0002'),
-    (r'0300\s*3376786', '0300 0000-0001'),
-    # 0800s da Porto
-    (r'0800\s*727\s*8736', '0800 0000-0001'),  # deficiência auditiva
-    (r'0800\s*727\s*2766', '0800 0000-0002'),  # SAC
-    (r'0800\s*727\s*1184', '0800 0000-0003'),  # Ouvidoria
-    (r'0800\s*727\s*9393', '0800 0000-0004'),  # outras localidades
-    (r'0800\s*701\s*5582', '0800 0000-0005'),
-    (r'0800\s*727\s*7477', '0800 0000-0006'),
-    # NOTA: 0800 218484 é da SUSEP (órgão regulador real, mantido).
+
+    # === Capitais e grandes centros: 4004-XXXX (família "famosa" Porto Seguro) ===
+    # Regras específicas conhecidas
+    (r'\(?11\)?\s+4004[\s\-]?767[68]',  '(11) 0000-0005'),
+    (r'\(?11\)?\s+333[\s\-]?76786',     '(11) 0000-0006'),
+    # Variantes alfanuméricas branded (sempre uppercase em material oficial Porto)
+    (r'\b4004[\s\-]?PORTO\b',           '(11) 0000-0005'),  # 4004-PORTO
+    (r'\b333[\s\-]?PORTO\b',            '(11) 0000-0006'),  # 333-PORTO
+    (r'\b3337[\s\-]?6786\b',            '(11) 0000-0006'),  # 3337-6786 (mesmo que 333-PORTO)
+    # Catch-all 4004-XXXXX genérico (qualquer número 4-5 dígitos após 4004-)
+    # Cobre: 4004-76786, 4004-3600, 4004-5215, e quaisquer outras variantes
+    # Porto Seguro de cartão/produto. Após as regras mais específicas acima
+    # como guard, esse cai pra qualquer 4004- restante.
+    (r'\b4004[\s\-]?\d{4,5}\b',         '(11) 0000-0005'),
+
+    # === Centrais 0300 ===
+    (r'0300\s*33\s*76786',              '0300 0000-0001'),
+    (r'0300\s*33\s*7676',               '0300 0000-0002'),
+    (r'0300\s*3376786',                 '0300 0000-0001'),
+
+    # === 0800s da Porto Seguro ===
+    (r'0800\s*727\s*8736',              '0800 0000-0001'),  # deficiência auditiva
+    (r'0800\s*727\s*2766',              '0800 0000-0002'),  # SAC
+    (r'0800\s*727\s*1184',              '0800 0000-0003'),  # Ouvidoria
+    (r'0800\s*727\s*9393',              '0800 0000-0004'),  # outras localidades
+    (r'0800\s*701\s*5582',              '0800 0000-0005'),
+    (r'0800\s*727\s*7477',              '0800 0000-0006'),
+    # Catch-all pros demais 0800-727-XXXX (família Porto)
+    # Cobre: 0800-727-0800 e outros que possam aparecer
+    # NOTA: 0800 218484 é da SUSEP — não bate aqui (727 ≠ 218).
+    (r'0800[\s\-]?727[\s\-]?\d{3,4}',   '0800 0000-0007'),
 ]
 
 # --- Substituições principais (ordem importa: multi-word primeiro) ---
