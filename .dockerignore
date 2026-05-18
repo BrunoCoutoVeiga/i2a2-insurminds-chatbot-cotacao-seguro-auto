@@ -1,0 +1,56 @@
+# Excluído do build Docker pra reduzir tamanho da imagem e tempo de build.
+# Apenas backend Python + data/ + scripts/ + pyproject.toml são necessários.
+
+# Frontend Next.js (deploy é via Vercel, não vai no container do backend)
+web/
+node_modules/
+
+# Python local
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+
+# Vector store local — vai ser regerado no build via ingest_kb.py
+.chroma/
+data/chroma/
+
+# Cache de HuggingFace local (vai ser baixado no build)
+.cache/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentação que não é necessária no runtime
+docs/
+meetings/
+data/raw/
+*.md
+!data/kb/*.md
+
+# Config de outras plataformas (Render, etc) — só queremos HF aqui
+render.yaml
+
+# Secrets — NUNCA copiar pro container
+.env
+.env.local
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
