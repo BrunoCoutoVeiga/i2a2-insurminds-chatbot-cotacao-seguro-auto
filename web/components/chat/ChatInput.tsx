@@ -38,9 +38,9 @@ export function ChatInput({ onSend, disabled, debugMode, onDebugModeChange }: Pr
   }
 
   return (
-    // items-end alinha o pill do Debug e o botão Enviar com a BASE do textarea,
-    // ficando bonito mesmo quando o textarea tem 4 linhas de altura.
-    <div className="flex w-full items-end gap-2 border-t border-zinc-200 bg-white px-4 py-3">
+    // items-center centraliza verticalmente o pill do Debug e o botão Enviar
+    // em relação à altura total do textarea (4 linhas).
+    <div className="flex w-full items-center gap-2 border-t border-zinc-200 bg-white px-4 py-3">
       {/* Modo Debug toggle compact — vive aqui pra liberar espaço no header
          global, permitindo que o painel debug se estenda até o topo. */}
       <label
