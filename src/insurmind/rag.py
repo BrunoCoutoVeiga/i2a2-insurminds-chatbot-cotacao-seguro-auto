@@ -80,25 +80,29 @@ _collection: object | None = None
 
 
 def _get_model():
-    """Carrega o modelo e5 lazy. Primeira chamada custa ~3-30s dependendo
-    do hardware; chamadas subsequentes retornam o cached singleton.
+    """Carrega o modelo e5 lazy DIRETO em float16. Primeira chamada custa
+    ~3-30s; chamadas subsequentes retornam o cached singleton.
 
-    Se INSURMIND_USE_FP16=1, carrega DIRETO em float16 via model_kwargs.
-    Crítico fazer assim em vez de .half() pós-load: .half() tem PICO de
-    memória durante a conversão (fp32 + fp16 simultaneamente = OOM em
-    512MB). Direto em fp16 não tem esse pico.
+    fp16 é o DEFAULT (sem flag) porque:
+    1. Free tier do Render (512MB) só cabe fp16 do e5-small (~236MB).
+    2. Em dev local (Bruno tem RAM de sobra), fp16 não muda nada perceptível.
+    3. Flag opcional via env var introduz bug onde o deploy esquece de setar.
+    4. .half() pós-load tem PICO (fp32 + fp16 simultaneamente = OOM).
+       model_kwargs={'torch_dtype': fp16} cria o modelo DIRETO em fp16.
+
+    Pra forçar fp32 em algum cenário específico, setar INSURMIND_FP32=1.
     """
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
 
         kwargs = {}
-        if os.environ.get("INSURMIND_USE_FP16") == "1":
+        if os.environ.get("INSURMIND_FP32") != "1":
             import torch
             kwargs["model_kwargs"] = {"torch_dtype": torch.float16}
-            logger.info("Carregando modelo '%s' DIRETO em fp16...", EMBED_MODEL_NAME)
+            logger.info("Carregando modelo '%s' em fp16 (default)...", EMBED_MODEL_NAME)
         else:
-            logger.info("Carregando modelo '%s'...", EMBED_MODEL_NAME)
+            logger.info("Carregando modelo '%s' em fp32 (INSURMIND_FP32=1)...", EMBED_MODEL_NAME)
 
         _model = SentenceTransformer(EMBED_MODEL_NAME, **kwargs)
         logger.info("Modelo carregado.")

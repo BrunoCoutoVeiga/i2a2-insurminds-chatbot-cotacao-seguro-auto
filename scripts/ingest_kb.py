@@ -124,10 +124,10 @@ def main():
     print(f'Carregando modelo de embedding "{EMBED_MODEL_NAME}"...')
     print('(primeira vez: download ~500MB do HuggingFace; depois fica cacheado)')
     kwargs = {}
-    if os.environ.get("INSURMIND_USE_FP16") == "1":
+    if os.environ.get("INSURMIND_FP32") != "1":
         import torch
         kwargs["model_kwargs"] = {"torch_dtype": torch.float16}
-        print("Carregando DIRETO em fp16 (sem pico de memória da conversão pós-load).")
+        print("Carregando DIRETO em fp16 (default; opt-out: INSURMIND_FP32=1).")
     model = SentenceTransformer(EMBED_MODEL_NAME, **kwargs)
     print(f'Modelo carregado. Dim: {model.get_sentence_embedding_dimension()}')
 

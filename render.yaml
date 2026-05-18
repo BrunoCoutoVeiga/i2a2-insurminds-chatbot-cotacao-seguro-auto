@@ -64,12 +64,8 @@ services:
       - key: INSURMIND_EMBED_MODEL
         value: intfloat/multilingual-e5-small
 
-      # Carrega o modelo em float16 (~236MB) em vez de float32 (~470MB).
-      # Necessário pra caber em 512MB do free tier do Render junto com o
-      # resto da app. Trade-off mínimo em qualidade de retrieval (~1%).
-      # Sem isso, observamos OOM e crashloop do uvicorn em produção.
-      - key: INSURMIND_USE_FP16
-        value: "1"
+      # fp16 agora é DEFAULT no código (rag.py e scripts/ingest_kb.py).
+      # Pra forçar fp32 (debug local), setar INSURMIND_FP32=1.
 
       # ⚠️ SECRET — preencher no dashboard do Render após o serviço ser criado.
       # Pega em https://console.anthropic.com/settings/keys
