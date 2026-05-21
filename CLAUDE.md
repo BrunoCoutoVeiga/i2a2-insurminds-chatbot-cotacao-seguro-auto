@@ -6,13 +6,89 @@ Chatbot conversacional de **atendimento ao segurado de automóveis** em PT-BR �
 **Deadline:** 2026-05-29 (entrega obrigatória, eliminatória).
 **Resultados:** anunciados até 2026-06-01.
 
+---
+
+## 🚀 PRIMEIRA EXECUÇÃO NESTA MÁQUINA? Leia isto antes.
+
+> Esta seção é direcionada a você, **Claude Code**, ao ser executado pela primeira vez nesta cópia do projeto. Bruno está provavelmente migrando o projeto pra esta máquina e espera que VOCÊ conduza o setup a partir daqui.
+
+### 1. Checagem rápida do estado do ambiente local
+
+Rode esses comandos pra detectar se o setup já foi feito ou se a máquina está virgem:
+
+```powershell
+# Diretório atual deve ser a raiz do projeto (tem CLAUDE.md, pyproject.toml, etc.)
+ls CLAUDE.md pyproject.toml Dockerfile          # confirma que clonou certo
+
+# Esses 4 indicam setup completo. Se algum NÃO existir, é máquina nova.
+ls .venv                                        # virtualenv Python
+ls .chroma                                      # base vetorial ChromaDB
+ls .env                                         # secrets (ANTHROPIC_API_KEY etc.)
+ls web\node_modules                             # deps do frontend Next.js
+```
+
+### 2. Se a máquina está virgem (algum dos 4 acima faltou)
+
+Existem **2 cenários** dependendo de quais arquivos sobreviveram:
+
+**Cenário A — `.env` E `.chroma/` faltam (clone limpo do GitHub)**
+
+Bruno fez `git clone` numa máquina virgem. **Conduza-o pelo `docs/setup-new-machine.md` → "Caminho A"** (~60-90 min: instalar Git/Python/Node via winget, configurar `.env`, rodar `ingest_kb.py`, validar). Detalhes a ressaltar:
+- O `.env` precisa ser **recriado manualmente** com `ANTHROPIC_API_KEY` (gera em https://console.anthropic.com/settings/keys se Bruno não tiver salva).
+- O remote `hf` **não vem do clone** do GitHub: `git remote add hf https://huggingface.co/spaces/bveiga/insurminds-api`.
+
+**Cenário B — `.env` e `.chroma/` EXISTEM, mas `.venv/` ou `web/node_modules/` faltam (cópia via rede)**
+
+Bruno copiou a pasta inteira da máquina antiga via rede/USB e deletou as pastas que não migram bem (paths hardcoded). **Conduza-o pelo `docs/setup-new-machine.md` → "Caminho B"** (~15-20 min: só recriar `.venv` + `node_modules`).
+
+Confira nesse cenário:
+- `git remote -v` deve mostrar `origin` (GitHub) e `hf` (HF Space) — vieram do `.git/` copiado.
+- `.env` deve estar preenchido (veio da cópia).
+- `.chroma/` deve ter os 312 chunks ingeridos (não precisa re-rodar `ingest_kb.py`).
+
+**Em ambos os cenários**:
+- Esta máquina tem **RTX 5060 Ti 16GB**. O setup default usa CPU+fp16 (funciona, mas embedding lento ~10-15s na primeira query). Há uma seção "Bônus — Sua RTX 5060 Ti" em `docs/setup-new-machine.md` mostrando como ativar PyTorch CUDA pra ~10x mais velocidade — **mas só aplique DEPOIS do setup CPU básico validado**.
+
+### 3. Se a máquina já está pronta (os 4 itens existem)
+
+Bruno provavelmente quer **continuar o desenvolvimento de onde parou**. Diagnóstico:
+
+```powershell
+git status                # mudanças pendentes?
+git log --oneline -5      # últimos commits (referência do estado)
+git remote -v             # confirma origin (GitHub) e hf (HuggingFace Space)
+```
+
+Pergunte ao Bruno o que ele quer fazer. URLs importantes pra contexto:
+- **Demo ao vivo (UI)**: https://insurminds-chatbot.vercel.app
+- **Backend ao vivo (API)**: https://bveiga-insurminds-api.hf.space
+- **Repo público (entrega)**: https://github.com/BrunoCoutoVeiga/i2a2-insurminds-chatbot-cotacao-seguro-auto
+- **Repo HF Space (Docker source)**: https://huggingface.co/spaces/bveiga/insurminds-api
+
+### 4. Estado de entrega (snapshot 2026-05-19)
+
+O trabalho está **considerado concluído** pra entrega ao professor. Sumário detalhado em `RELATORIO.md` seção "3. Estado de entrega". TL;DR:
+- ✅ Todos os 6 critérios de "pronto" do plano original atingidos
+- ✅ Deploy ativo: frontend Vercel + backend HuggingFace Spaces
+- ✅ Anti-prompt-injection (renomeação de tools + regra no system prompt)
+- ✅ Anonimização Porto Seguro → Porto Inseguro 100% (verificado com grep adversarial)
+- ⚠️ Tarifador real do grupo (João + Adriele) nunca chegou — mock `cotar_seguro_auto` cobre o DoD com interface estável pra troca futura
+
+Se Bruno estiver continuando dev, prováveis frentes ainda em aberto:
+- Receber e plugar o tarifador real (troca de implementação interna de `compute_quote_mock` em `src/insurmind/quote.py`)
+- QA conversacional adicional (10 FAQs do DoD)
+- Slides de apresentação (10-12 slides — feito fora do repo)
+- Melhorias técnicas pós-entrega: ativar GPU, ONNX, embeddings via API externa, etc.
+
+---
+
 ## Origem deste repositório
 
 Extraído em 2026-05-14 do projeto `transcribe_yt` (em `C:\Bruno\OneDrive - Rede D'Or\05.Pessoal\Projetos\transcribe_yt`), que ficou responsável apenas pelo pipeline de transcrição de videoaulas.
 
 As **análises das aulas** que motivaram o escopo deste produto foram copiadas para [docs/aulas/](docs/aulas/) como referência imutável.
 
-O **plano técnico aprovado por Bruno** vive em `C:\Users\Bruno\.claude\plans\eu-perdi-o-v-deo-quirky-pinwheel.md`. O **plano de planejamento do grupo** (escrito pelo João pós-reunião 14/05) está em [meetings/Sugestão de Planejamento - Desafio II - feedback da reunião de 14.05.pdf](<meetings/Sugestão de Planejamento - Desafio II - feedback da reunião de 14.05.pdf>) — esse plano lista 5 frentes, propõe stack alternativa (rejeitada — ver "Stack" abaixo) e fixa as 3 sprints.
+O **plano técnico aprovado por Bruno** vive em `C:\Users\Bruno\.claude\plans\eu-perdi-o-v-deo-quirky-pinwheel.md`. O **plano de planejamento do grupo** (escrito pelo João pós-reunião 14/05) listava 5 frentes, propunha stack alternativa (rejeitada — ver "Stack" abaixo) e fixava as 3 sprints. O PDF original ficava em `meetings/` mas foi removido em 2026-05-19 na limpeza pré-entrega (conteúdo proprietário não cabe em repo público).
 
 **Workflow com `transcribe_yt`:** quando uma aula nova for liberada → rodar `transcribe-yt one aula-NN` no repo `transcribe_yt`, copiar a análise resultante para [docs/aulas/](docs/aulas/) aqui e atualizar este `CLAUDE.md` se mudar o escopo. Para auditoria de citação ("o prof. disse X"), o `.srt` com timestamps está em `transcribe_yt/transcricoes/`.
 
@@ -52,7 +128,7 @@ Bruno é desenvolvedor experiente; pede explicações didáticas quando o concei
 
 - A **Atividade 1** já foi entregue (anterior a este trabalho).
 - Esta **Atividade 2** foi apresentada pelo professor nas **aulas 4 e 5** e reforçada na **aula 6** (com o convidado **Onelio Ceabra**, que validou o método Vibe Code e enfatizou guardrails + padrão conversacional).
-- **Reunião do grupo em 14/05** consolidou o escopo (3 fluxos), validou Opção A (Python), e dividiu frentes. Transcrição em [meetings/20260514.txt](meetings/20260514.txt).
+- **Reunião do grupo em 14/05** consolidou o escopo (3 fluxos), validou Opção A (Python), e dividiu frentes. Transcrição originalmente em `meetings/20260514.txt` — pasta removida na limpeza pré-entrega (audit trail interno fora do repo público).
 
 ## Escopo do chatbot (3 fluxos)
 
@@ -152,15 +228,9 @@ chatbot/
 │       ├── aula-04-trabalho.md
 │       ├── aula-05-trabalho.md
 │       └── aula-06-trabalho.md
-├── meetings/                       # transcrições e materiais das reuniões
-│   ├── 20260514.txt                # ✅ transcrição reunião 14/05
-│   ├── CG142-Porto-Oficial-3402.pdf       # ✅ Condições Gerais Porto (fonte primária KB)
-│   ├── CG142-Porto-Oficial-3402-raw.txt   # ✅ extração textual pypdf
-│   ├── Sugestão de Planejamento ...pdf    # ✅ plano do João Carlos
-│   ├── porto-faq-titulos.txt              # ✅ lista bruta dos títulos da FAQ Porto (auditável)
-│   ├── porto-faq-html/                    # ✅ HTML cru de cada FAQ Porto (98 arquivos)
-│   ├── porto-faq-fetch-log.json           # ✅ log do fetch (status por URL)
-│   └── porto-faq-parsed.json              # ✅ debug do parser
+# (pasta meetings/ removida em 2026-05-19 — continha material proprietário
+#  Porto Seguro real + transcrições internas do grupo. Repo público não deve
+#  hospedar isso. Conteúdo migrado pra audit local fora do repo.)
 ├── src/insurmind/
 │   ├── __init__.py
 │   ├── agent.py                    # ✅ orquestrador agnóstico (chat_stream_events emite 8 eventos agent-centric)
@@ -191,18 +261,19 @@ chatbot/
 │   ├── fetch_porto_faq.py          # ✅ baixa HTMLs da FAQ Porto Auto
 │   ├── build_porto_faq_md.py       # ✅ parseia HTML, categoriza, gera 09-porto-faq.md
 │   ├── anonymize_porto.py          # ✅ anonimiza Porto Inseguro → Porto Inseguro (idempotente)
-│   └── ingest_kb.py                # ✅ chunk + embed e5-base + carga Chroma (298 chunks)
-└── tests/                          # ⏳ a criar
-    ├── test_quote.py
-    └── test_rag.py
+│   └── ingest_kb.py                # ✅ chunk + embed e5-base + carga Chroma (312 chunks)
 ```
+# (pasta tests/ não foi criada — projeto acadêmico priorizou smoke test
+#  manual em produção sobre TDD por restrição de tempo. Quando precisar
+#  escalar pra cobertura automatizada: test_quote.py pra cotação +
+#  test_rag.py pra retrieval. Hoje, validação é via demo ao vivo.)
 
 ## Anonimização da seguradora
 
 **Atenção, futuras sessões / quem ler este repo:** a base de conhecimento usa o nome fictício **"Porto Inseguro"** em todos os arquivos `data/kb/`, em `RELATORIO.md`, em `docs/`, e neste `CLAUDE.md`. O conteúdo foi extraído de materiais públicos de uma seguradora brasileira real e **sistematicamente anonimizado** (nome, telefones, CNPJ, URLs, endereços, diretor) para fins acadêmicos.
 
 - Script idempotente: `scripts/anonymize_porto.py` (rode `--include-docs` pra processar também os docs além de `data/kb/`).
-- O que NÃO é anonimizado: pasta `meetings/` (PDF Porto original, HTMLs baixados, logs de fetch) — mantida como evidência de auditoria do processo de coleta.
+- Audit trail original (PDFs Porto, HTMLs baixados, logs de fetch) ficava em `meetings/` mas foi removida em 2026-05-19 na limpeza pré-entrega — repo agora é público (curso exige), conteúdo proprietário não cabe. Em backup local fora do git.
 - Cidades brasileiras com "Porto" no nome (Porto Alegre, Porto Belo, Porto Real, Senhora do Porto, etc.) são **preservadas** pelo script via lista explícita.
 - Filenames com prefixo `porto-` (`08-porto-condicoes-gerais.md`, `09-porto-faq.md`, `scripts/fetch_porto_faq.py`) **não foram renomeados** — o "porto" no nome é a abreviação genérica usada nas convenções internas; o conteúdo é Porto Inseguro.
 
@@ -275,7 +346,7 @@ KB organizada em camadas — **Porto Inseguro é a fonte primária**, SUSEP/FENA
 - **Disclaimer didático** em todas as cotações: valores e regras são fictícios e não constituem oferta vinculante da Porto Inseguro ou qualquer outra seguradora.
 - **Heurística "a favor do segurado":** quando o input do usuário for ambíguo (ex.: "minha tia mora ao lado e às vezes meu primo põe o carro na garagem dela" — tem ou não garagem?), interpretar a favor do segurado para concessão de desconto/cobertura. Princípio reforçado pela Adriele na reunião de 14/05.
 - **Registrar decisões substancias** no `RELATORIO.md` no formato *Opções consideradas → Tradeoffs → Escolha → Justificativa* — o relatório é entregável avaliado pelos professores e essas seções demonstram raciocínio de engenharia.
-- **Auditabilidade de citações:** quando um artefato (decisão, princípio, exemplo) for derivado de fala específica do professor numa aula, citar o timestamp da transcrição (formato `aula-NN @ HH:MM:SS`). Os `.srt` originais ficam em `transcribe_yt/transcricoes/` (ver "Origem deste repositório"). Para citações da reunião do grupo, citar [meetings/20260514.txt](meetings/20260514.txt).
+- **Auditabilidade de citações:** quando um artefato (decisão, princípio, exemplo) for derivado de fala específica do professor numa aula, citar o timestamp da transcrição (formato `aula-NN @ HH:MM:SS`). Os `.srt` originais ficam em `transcribe_yt/transcricoes/` (ver "Origem deste repositório"). Citações da reunião do grupo ficavam em `meetings/20260514.txt` mas a pasta foi removida no cleanup pré-entrega (manter backup local se precisar verificar).
 - **Anti-alucinação no RAG:** prompt do sistema exige citação de fonte para toda resposta factual; threshold de similaridade no retriever; se nenhum chunk passar o threshold, responder "não encontrei essa informação" e oferecer encaminhamento humano.
 - **Interface-first para integrações que ainda virão do grupo:** a planilha de tarifador está sendo construída por João Carlos + Adriele. Implementamos `cotar_seguro_auto` com **interface estável** (`QuoteInput`/`QuoteOption` dataclasses) e implementação interna em dict in-memory. Quando a planilha chegar, **só a implementação interna muda** — assinatura da função, system prompt, UI, testes permanecem.
 - **Agente como event-stream, não black box:** `agent.chat_stream_events()` é um `AsyncIterator[AgentEvent]` que emite **8 eventos agent-centric narrados em gerúndio** (refator 2026-05-17 — antes eram 5 sem perspectiva clara). Sequência canônica (FAQ com tool): `agent_received_user_input` → `agent_sending_to_llm` → `agent_received_tool_request_from_llm` → `agent_executing_tool` → `agent_received_tool_result` → `agent_sending_tool_result_to_llm` → `agent_received_text_from_llm` → `agent_delivering_answer_to_user`. Off-domain (LLM responde direto): só passos 1, 2, 7, 8. UI normal consome o stream silenciosamente; Modo Debug consome o MESMO stream, mostra cada evento e pausa entre eles. **Nenhum código duplicado**. Agente é sempre o sujeito ativo do evento — não "tool_called" mas "agent_executing_tool"; foco didático no orquestrador.
@@ -293,7 +364,7 @@ KB organizada em camadas — **Porto Inseguro é a fonte primária**, SUSEP/FENA
 - **Repo público (entrega do curso)**: https://github.com/BrunoCoutoVeiga/i2a2-insurminds-chatbot-cotacao-seguro-auto
 - **Repo HF Space**: https://huggingface.co/spaces/bveiga/insurminds-api
 
-Render `render.yaml` foi mantido no repo como artefato histórico, mas a tentativa de deploy lá foi abandonada por OOM no free tier (512MB). Migração pra HF Spaces (16GB) resolveu sem mudar código de aplicação. Detalhes em RELATORIO.md sessão "2026-05-17 (noite) — Frente B".
+A tentativa inicial de deploy foi no Render mas abandonada por OOM no free tier (512MB). Migração pra HF Spaces (16GB) resolveu sem mudar código de aplicação. `render.yaml` removido em 2026-05-19 na limpeza pré-entrega — histórico no RELATORIO.md sessão "2026-05-17 (noite) — Frente B".
 
 ## Comandos úteis
 

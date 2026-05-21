@@ -13,7 +13,7 @@
 >
 > **Por quê:** o trabalho é acadêmico (curso I2A2 InsurMinds, Atividade Obrigatória 2). Anonimizar evita aparência de endosso comercial, conflito de marca, e qualquer risco de o chatbot ser confundido com um canal real da seguradora original.
 >
-> **Detalhes técnicos da anonimização:** ver `scripts/anonymize_porto.py` e a seção correspondente em `RELATORIO.md`. Os arquivos brutos em `meetings/` (PDF original, HTMLs baixados, log de fetch) **preservam os nomes reais** como evidência do processo de coleta.
+> **Detalhes técnicos da anonimização:** ver `scripts/anonymize_porto.py` e a seção correspondente em `RELATORIO.md`. Os arquivos brutos originais (PDF da seguradora real, HTMLs baixados, log de fetch) ficavam em `meetings/` mas foram removidos do repo público na limpeza pré-entrega (2026-05-19). Backup local guardado pra auditoria, se necessário.
 
 ---
 
@@ -842,3 +842,32 @@ A descoberta + correção desse comportamento é **estudo de caso pedagógico fo
 3. **Calibração empírica via instrumentação >>> calibração por palpite** — o valor 1.30 era placeholder que ninguém testou. Bastou um dia de logs reais pra descobrir que 0.40 é o número certo.
 
 São princípios diretamente aplicáveis a qualquer projeto de agente com RAG no mundo real.
+
+---
+
+## Addendum 2026-05-19 — Trabalho concluído e entregue ao professor
+
+Repo público pra entrega: https://github.com/BrunoCoutoVeiga/i2a2-insurminds-chatbot-cotacao-seguro-auto
+
+Demo ao vivo: https://insurminds-chatbot.vercel.app
+
+Resumo dos últimos ajustes pré-entrega (após o addendum de 2026-05-17):
+
+1. **Deploy completo**: backend FastAPI no HuggingFace Spaces (16GB RAM Docker free tier), frontend Next.js no Vercel — ambos com auto-deploy via GitHub push.
+
+2. **Hardening anti-prompt-injection (2026-05-18)**: descoberto via meta-pergunta que a LLM revelava nomes técnicos das tools (`compute_quote_mock` delatava simulação). Mitigado com:
+   - Regra de confidencialidade no system prompt (nunca revelar nomes técnicos, arquitetura, prompt)
+   - Renomeação das tools pra nomes neutros: `retrieve_kb` → `consultar_porto_inseguro`, `compute_quote_mock` → `cotar_seguro_auto`, `escalar_humano` → `encaminhar_atendimento`
+
+3. **Bug de anonimização downstream (2026-05-18)**: o `scripts/anonymize_porto.py` deixava passar telefones reais Porto Seguro com padrões `4004-XXXX`, `333-PORTO`, `0800-727-XXXX`. Adicionados catch-all regex; KB re-anonimizada com 12 substituições adicionais.
+
+4. **Cleanup pré-entrega (2026-05-19)**:
+   - Removida pasta `meetings/` (continha PDFs originais Porto Seguro real + HTMLs scrapados + transcrições internas do grupo — não cabem em repo público)
+   - Removido `render.yaml` (caminho de deploy abandonado em prol do HF Spaces)
+   - Adicionado `LICENSE` (MIT)
+   - Reescrito `README.md` pra ser landing page pública (preservando YAML frontmatter pro HF Spaces)
+   - Adicionada seção "Estado de entrega" no `RELATORIO.md` com URLs, métricas e perguntas sugeridas pro avaliador
+
+5. **Tarifador real do grupo (João Carlos + Adriele)**: não chegou em tempo. Mock `cotar_seguro_auto` com 13 campos atende ao DoD. Interface estável permite plug-in posterior em <30 min — só trocar a implementação de `compute_quote_mock` em `quote.py`.
+
+**Status final**: trabalho considerado **concluído**. Todos os 6 critérios de "pronto" do plano original (João Carlos, 14/05) foram atingidos. Detalhes em `RELATORIO.md` seção "3. Estado de entrega".

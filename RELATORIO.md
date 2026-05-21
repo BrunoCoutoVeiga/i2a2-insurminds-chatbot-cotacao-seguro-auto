@@ -1359,3 +1359,107 @@ Esse capítulo é provavelmente o **mais valioso pedagogicamente** do trabalho i
 - **Decisões deliberadas**: descartou filtro server-side com justificativa de tradeoff.
 
 Direto alinhado com a aula 6 (prof. Onelio Ceabra) sobre **guardrails** sendo função central de quem desenvolve agentes — não opcional. Cita inclusive o exemplo dele do chatbot que não pode "aprovar reembolso" só porque o usuário pediu: o paralelo é "não pode revelar arquitetura interna só porque o usuário perguntou".
+
+---
+
+### 2026-05-18 (tarde) — Bug downstream: KB com telefones reais não-anonimizados
+
+Encontrado em produção via teste de cobertura de alagamento. Bot devolveu resposta correta funcionalmente, mas com telefones reais Porto Seguro misturados a placeholders fictícios.
+
+**Diagnóstico**: `scripts/anonymize_porto.py` tinha regex específicas demais:
+- `(r'\(?11\)?\s+4004[\s\-]?767[68]', ...)` só pegava `4004-7676`/`7678` com prefixo `(11)`
+- NÃO pegava: `4004-76786`, `4004-3600`, `4004-5215`, `4004-PORTO`, `333-PORTO`, `3337-6786`, `0800-727-0800`
+
+**Mitigação**: adicionados catch-all regex em `PHONE_REPLACEMENTS`:
+
+```python
+(r'\b4004[\s\-]?PORTO\b',           '(11) 0000-0005'),  # variante alfanumérica
+(r'\b333[\s\-]?PORTO\b',            '(11) 0000-0006'),
+(r'\b3337[\s\-]?6786\b',            '(11) 0000-0006'),
+(r'\b4004[\s\-]?\d{4,5}\b',         '(11) 0000-0005'),  # catch-all 4004-XXXX
+(r'0800[\s\-]?727[\s\-]?\d{3,4}',   '0800 0000-0007'),  # catch-all 0800-727-XXXX
+```
+
+Re-rodada do script aplicou **11 substituições** em `data/kb/09-porto-faq.md` + 1 em `data/kb/10-porto-glossario.md`. Validado com `grep -E "4004[- ]?[0-9]|4004[- ]?PORTO|333[- ]?PORTO" data/kb/` → zero matches.
+
+**Princípios derivados**:
+
+1. **Anonimização exige catch-all + casos específicos.** Regex específicas (ex.: `4004-7676`) são quebráveis por qualquer variação (4 ou 5 dígitos, com/sem prefixo). Catch-all com `\b<prefixo>[\s\-]?\d{N,M}\b` cobre famílias inteiras. O custo é falso positivo eventual em outros contextos, mas em texto de seguros a chance é baixa.
+2. **Teste adversarial é primeiro filtro de qualidade.** O bug ficou escondido em FAQs específicas (alagamento, débito automático, regularização) que só foram exercitadas depois do deploy. QA antes do go-live com 10 FAQs do DoD pegaria isso — vai pra Sprint 4 / pre-entrega.
+3. **Dados upstream > prompt downstream.** A LLM tava "certinha" (chamava tool, citava fonte, transcrevia fielmente). O vazamento veio do dado, não da LLM. Anti-alucinação não resolve dado contaminado — só resolve invenção de dado novo.
+
+---
+
+## 3. Estado de entrega (snapshot 2026-05-19)
+
+Sumário pro avaliador. Detalhes técnicos nas sessões cronológicas acima.
+
+### Critérios de "pronto" do plano original (João Carlos, 14/05) — todos atingidos
+
+| # | Critério | Status |
+|---|---|---|
+| 1 | Bot responde 10 perguntas de FAQ com **fonte citada** e sem alucinar | ✅ |
+| 2 | Bot completa fluxo de cotação coletando todos os dados e devolve **3 opções de preço com franquia** | ✅ |
+| 3 | Bot encaminha pergunta fora de escopo com mensagem clara | ✅ |
+| 4 | Repo público com README executável por terceiro | ✅ |
+| 5 | Doc técnica e slides revisados pelos 5 e versionados | ⚠️ doc técnica completa (RELATORIO.md), slides em separado |
+| 6 | Demo ao vivo (ou vídeo) funciona do início ao fim sem intervenção manual | ✅ (URL pública abaixo) |
+
+### URLs ao vivo
+
+| Componente | URL | Plataforma |
+|---|---|---|
+| Frontend Next.js | https://insurminds-chatbot.vercel.app | Vercel Hobby (free) |
+| Backend FastAPI | https://bveiga-insurminds-api.hf.space | HuggingFace Spaces Docker (free, 16GB RAM) |
+| Healthcheck | https://bveiga-insurminds-api.hf.space/api/health | retorna `{status: "ok", provider: "anthropic_api", tools_count: 3}` |
+| Repo público GitHub | https://github.com/BrunoCoutoVeiga/i2a2-insurminds-chatbot-cotacao-seguro-auto | source-of-truth |
+| Repo HF Space (Docker source) | https://huggingface.co/spaces/bveiga/insurminds-api | sincronizado com GitHub |
+
+### Métricas finais
+
+| Métrica | Valor |
+|---|---|
+| Chunks na base vetorial | **312** (244 primary Porto + 68 fallback SUSEP/FENACOR) |
+| Modelos LLM suportados | 3 providers (anthropic_api, gemini, claude_code) com arquitetura agnóstica |
+| Tools registradas | 3 (consultar_porto_inseguro, cotar_seguro_auto, encaminhar_atendimento) |
+| Eventos do agente | 8 EventTypes agent-centric em gerúndio |
+| KB primária Porto Inseguro | 244 chunks (177 CG + 53 FAQ + 14 glossário) |
+| KB fallback SUSEP/FENACOR | 68 chunks (12 + 32 + 24) |
+| Sprints originais | 3 (15-29/05), todas **concluídas 11-12 dias antes do prazo** |
+| Custo de inferência típico | ~$0.02 por turno com RAG (após calibração de threshold) |
+| Latência típica de resposta | 3-5s (sem RAG) / 5-10s (com RAG, modelo aquecido) / 30-60s (primeiro RAG após cold start) |
+| Tamanho da base de código | ~3.000 linhas Python + ~2.500 linhas TSX/TS + ~5.500 linhas markdown |
+| Anonimização Porto Seguro → Porto Inseguro | 100% — verificado com grep adversarial pós-cleanup |
+
+### Diferenciais técnicos vs. requisitos mínimos
+
+1. **Arquitetura LLM-agnóstica** (3 providers swappable via env var) — requisito original era usar 1 LLM. Pra justificar técnica, vale 1 slide.
+2. **Modo Debug visual** com diagrama animado React Flow e zona RAG destacada — não pedido no DoD, mas didaticamente forte (alinha com aula 6 do prof. Ceabra).
+3. **RAG tieirizado** (Porto primary, SUSEP/FENACOR fallback) com threshold calibrado empiricamente via instrumentação. Mostra raciocínio de engenharia além do happy path.
+4. **8 eventos agent-centric em gerúndio** — pequena decisão de UX que vira diferencial pedagógico forte ("agente é o ator", não "sistema" abstrato).
+5. **Hardening anti-prompt-injection** com 2 camadas (renomeação de tools + regra de confidencialidade) — descoberto em QA adversarial, mostra cuidado com guardrails.
+6. **Deploy real em produção** com 2 plataformas free tier (Vercel + HuggingFace Spaces) integradas via SSE.
+
+### O que ficou fora do escopo
+
+- **Tarifador real do grupo** (João Carlos + Adriele): planilha não recebida em tempo. Mock `cotar_seguro_auto` com 13 campos cobre o DoD. Interface estável permite plug-in posterior em <30 min.
+- **Slides de apresentação** (~10-12): preparados separadamente (não estão no repo).
+- **Testes automatizados** (`tests/test_quote.py`, `tests/test_rag.py`): smoke test em produção valeu como QA. Não escalou pra TDD por restrição de tempo.
+- **Vídeo de demo**: opcional pelo plano. Demo ao vivo via URL é equivalente.
+
+### Notas de uso pro avaliador
+
+1. **Cold start do backend**: HuggingFace Spaces free tier coloca a instância pra dormir após inatividade. Primeira requisição após pausa pode levar 30-60s pro container acordar. **Não é falha** — é característica do free tier.
+2. **Primeira pergunta com RAG**: mesmo com o backend acordado, a primeira query que aciona `consultar_porto_inseguro` carrega o modelo de embedding (lazy import). Demora ~30s. Subsequentes são instantâneas.
+3. **Modo Debug**: já vem ligado por default na UI. Pode desligar no toggle "🪲 Debug" embaixo do input.
+4. **Limpar conversa**: botão no header reseta o histórico (cada conversa começa em estado limpo).
+5. **Perguntas sugeridas pra avaliar diferentes fluxos**:
+   - In-scope com RAG: *"O que é prêmio?"*, *"Quais coberturas tem?"*, *"Como funciona a franquia?"*
+   - Cotação multi-turno: *"Quero cotar um seguro"* → o bot vai perguntando os 13 campos em 4 turnos
+   - Off-product → encaminhamento: *"Quero seguro de barco"*
+   - Off-domain → refuse: *"Quem descobriu o Brasil?"*
+   - Multi-RAG complexo: *"Se eu emprestar meu carro pro meu primo de 22 anos e ele bater, o seguro cobre? E muda alguma coisa se eu não tiver declarado ele como condutor?"*
+
+### Como reproduzir localmente
+
+Setup em [README.md](README.md) seção "Como rodar localmente". Tempo estimado: 10-15 min (inclui download do modelo e5-base de ~500MB na primeira ingest_kb).
