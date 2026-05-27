@@ -2,9 +2,9 @@
 
 3 tools registradas (todas em formato agnóstico — `insurmind.llm.base.Tool`):
 
-- `retrieve_kb`         — busca semântica tieirizada na KB (Porto primária → SUSEP/FENACOR fallback)
-- `compute_quote_mock`  — cotação simulada com 13 campos de input → 3 opções de franquia
-- `escalar_humano`      — devolve mensagem padrão de encaminhamento (pra fora-do-produto)
+- `consultar_porto_inseguro` — busca semântica tieirizada na KB (Porto primária → SUSEP/FENACOR fallback)
+- `cotar_seguro_auto`        — cotação com 10 campos → 3 opções variando franquia
+- `encaminhar_atendimento`   — devolve mensagem padrão de encaminhamento (pra fora-do-produto)
 
 Os providers em `insurmind.llm.<motor>` traduzem essas tools pro formato nativo
 do motor (Claude SDK: MCP tools; Anthropic API: tool_use blocks; etc.).
@@ -15,7 +15,11 @@ from __future__ import annotations
 import logging
 
 from .llm import Tool
-from .quote import QuoteInput, compute_quote_mock
+from .quote import QuoteInput, QuoteUnavailableError, compute_quote
+from .quote_tables import (
+    FATOR_BONUS, FATOR_IDADE, FATOR_MODELO_POR_CHAVE,
+    FATOR_REGIAO, FATOR_USO, VALOR_ASSISTENCIA,
+)
 from .rag import retrieve_kb
 
 logger = logging.getLogger(__name__)
@@ -91,62 +95,120 @@ consultar_porto_inseguro_tool = Tool(
 # Tool 2 — compute_quote_mock
 # =============================================================================
 
+# Enums extraídos das tabelas geradas a partir da planilha v2.0 — fonte única de verdade.
+_MODELOS_ENUM = list(FATOR_MODELO_POR_CHAVE.keys())  # 16 chaves
+_CAPITAIS_ENUM = list(FATOR_REGIAO.keys())            # 6 capitais
+_FAIXAS_ETARIAS_ENUM = list(FATOR_IDADE.keys())       # 6 faixas
+_USOS_ENUM = list(FATOR_USO.keys())                   # 4 categorias
+_CLASSES_BONUS_ENUM = list(FATOR_BONUS.keys())        # 11 classes
+_ASSISTENCIA_ENUM = list(VALOR_ASSISTENCIA.keys())    # Básica/Ampliada
+
 _COMPUTE_QUOTE_SCHEMA = {
     "type": "object",
     "properties": {
-        "modelo":                 {"type": "string", "description": "Modelo do veículo (ex.: 'Polo', 'Onix', 'Argo')"},
-        "versao":                 {"type": "string", "description": "Versão (ex.: 'entrada', 'Highline', 'GTS')"},
-        "ano":                    {"type": "integer", "description": "Ano do veículo (ex.: 2026)"},
-        "cep_pernoite":           {"type": "string", "description": "CEP onde o carro fica à noite (8 dígitos, ex.: '01310-100')"},
-        "data_nascimento":        {"type": "string", "description": "Data de nascimento do principal condutor (formato 'DD/MM/AAAA')"},
-        "sexo":                   {"type": "string", "enum": ["M", "F"]},
-        "estado_civil":           {"type": "string", "enum": ["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]},
-        "uso":                    {"type": "string", "enum": ["particular", "trabalho", "aplicativo"], "description": "Uso primário do veículo"},
-        "garagem_casa":           {"type": "boolean", "description": "Carro fica em garagem fechada quando está em casa?"},
-        "garagem_trabalho":       {"type": "boolean", "description": "Carro fica em garagem fechada quando está no trabalho?"},
-        "garagem_fim_de_semana":  {"type": "boolean", "description": "Carro fica em garagem nos fins de semana?"},
-        "ha_condutor_menor_25":   {"type": "boolean", "description": "Algum condutor adicional com menos de 25 anos usa o veículo?"},
-        "tipo_cobertura":         {"type": "string", "enum": ["compreensiva", "roubo_furto", "basica_terceiros"], "description": "Tipo de cobertura desejada"},
+        "modelo_versao": {
+            "type": "string",
+            "enum": _MODELOS_ENUM,
+            "description": "Modelo+versão do veículo. Se o usuário disser só 'Polo' ou 'Onix', pergunte qual versão (entrada ou topo) antes de chamar.",
+        },
+        "ano": {
+            "type": "string",
+            "enum": ["0km", "2026", "2025", "2024", "2023"],
+            "description": "Ano do veículo. '0km' para veículo novo a sair da concessionária.",
+        },
+        "capital": {
+            "type": "string",
+            "enum": _CAPITAIS_ENUM,
+            "description": "Capital onde o veículo pernoita. Se o usuário disser uma cidade que não é capital ou está fora da lista, ofereça a capital mais próxima como aproximação.",
+        },
+        "faixa_etaria": {
+            "type": "string",
+            "enum": _FAIXAS_ETARIAS_ENUM,
+            "description": "Faixa etária do condutor principal. Calcule pela idade que o usuário informou.",
+        },
+        "sexo": {
+            "type": "string",
+            "enum": ["Masculino", "Feminino"],
+        },
+        "uso": {
+            "type": "string",
+            "enum": _USOS_ENUM,
+            "description": "Uso primário do veículo. 'Particular - lazer/trabalho' até ~30km/dia, 'Particular - alta rodagem' acima de 60km/dia, 'Comercial - representante' para viagens de trabalho, 'App (Uber/99)' para motoristas de aplicativo.",
+        },
+        "pernoite": {
+            "type": "string",
+            "enum": ["Sim - garagem fechada", "Sim - estacionamento", "Não - rua"],
+            "description": "Onde o carro fica à noite. Em caso de ambiguidade, interprete a favor do segurado (escolha a opção que reduz o prêmio).",
+        },
+        "classe_bonus": {
+            "type": "string",
+            "enum": _CLASSES_BONUS_ENUM,
+            "description": "Classe de bônus. 'Classe 0' = seguro novo (sem histórico). 'Classe N' = N anos consecutivos sem sinistro avisado. 'Classe 10' = 10+ anos.",
+        },
+        "cobertura": {
+            "type": "string",
+            "enum": ["Compreensiva", "RF+Inc+RCF-V", "Só RCF-V"],
+            "description": "Tipo de cobertura. 'Compreensiva' = mais completa (colisão + roubo + incêndio + terceiros + APP). 'RF+Inc+RCF-V' = só roubo, furto, incêndio + terceiros. 'Só RCF-V' = só danos a terceiros, sem casco.",
+        },
+        "assistencia": {
+            "type": "string",
+            "enum": _ASSISTENCIA_ENUM,
+            "description": "Nível da assistência 24h. 'Básica' = guincho 100km + chaveiro + pneu + pane seca (R$ 180/ano). 'Ampliada' = guincho ilimitado + carro reserva 15 dias + hospedagem (R$ 360/ano).",
+        },
     },
     "required": [
-        "modelo", "versao", "ano", "cep_pernoite", "data_nascimento", "sexo",
-        "estado_civil", "uso", "garagem_casa", "garagem_trabalho", "garagem_fim_de_semana",
-        "ha_condutor_menor_25", "tipo_cobertura",
+        "modelo_versao", "ano", "capital", "faixa_etaria", "sexo", "uso",
+        "pernoite", "classe_bonus", "cobertura", "assistencia",
     ],
 }
 
 
 async def _handler_cotar_seguro_auto(args: dict) -> dict:
     logger.info(
-        "TOOL cotar_seguro_auto invocada: %s %s %s, CEP=%s, cobertura=%s",
-        args.get("modelo"), args.get("versao"), args.get("ano"),
-        args.get("cep_pernoite"), args.get("tipo_cobertura"),
+        "TOOL cotar_seguro_auto invocada: %s %s, %s, %s/%s, %s, %s",
+        args.get("modelo_versao"), args.get("ano"), args.get("capital"),
+        args.get("sexo"), args.get("faixa_etaria"),
+        args.get("cobertura"), args.get("assistencia"),
     )
-    qin = QuoteInput(**args)
-    opcoes = compute_quote_mock(qin)
+    try:
+        qin = QuoteInput(**args)
+        opcoes = compute_quote(qin)
+    except QuoteUnavailableError as e:
+        logger.warning("TOOL cotar_seguro_auto: combinação indisponível — %s", e)
+        return {
+            "text": (
+                f"Não tenho cotação para {e.modelo_versao} no ano {e.ano}. "
+                f"Anos disponíveis para esse modelo: {', '.join(e.anos_disponiveis)}. "
+                "Peça ao usuário pra escolher um ano disponível ou outro modelo."
+            )
+        }
+    except (KeyError, ValueError) as e:
+        logger.warning("TOOL cotar_seguro_auto: argumento inválido — %s", e)
+        return {"text": f"Argumento inválido na cotação: {e}. Reconfirme os dados com o usuário."}
+
     logger.info(
         "TOOL cotar_seguro_auto devolvendo 3 opções: %s",
         ", ".join(f"{o.nivel_franquia}=R${o.premio_anual:,.2f}" for o in opcoes),
     )
 
-    cob_label = {
-        "compreensiva": "Compreensiva",
-        "roubo_furto": "Roubo/Furto/Incêndio + RCF-V",
-        "basica_terceiros": "Básica (terceiros)",
-    }[qin.tipo_cobertura]
-
     parts: list[str] = [
-        f"Cotação simulada — {qin.modelo} {qin.versao} {qin.ano}, "
-        f"cobertura {cob_label}, CEP {qin.cep_pernoite}, "
-        f"condutor {qin.sexo}/{qin.estado_civil} nascido em {qin.data_nascimento}.\n",
+        f"Cotação — {qin.modelo_versao} {qin.ano} | {qin.capital} | "
+        f"condutor {qin.sexo} {qin.faixa_etaria} | "
+        f"Cobertura {qin.cobertura} | Assistência {qin.assistencia} | "
+        f"Bônus {qin.classe_bonus}\n",
     ]
     for o in opcoes:
+        franq = (
+            f"franquia em sinistro R$ {o.valor_franquia:,.2f}"
+            if o.valor_franquia is not None
+            else "sem casco (franquia N/A)"
+        )
         parts.append(
             f"\n• Franquia {o.nivel_franquia.upper()}: "
-            f"prêmio anual R$ {o.premio_anual:,.2f} / "
-            f"franquia em sinistro R$ {o.valor_franquia:,.2f}"
+            f"prêmio anual R$ {o.premio_anual:,.2f} "
+            f"(mensal R$ {o.premio_mensal:,.2f}) — {franq}"
         )
-    parts.append(f"\n\nCoberturas inclusas (mesmas nas 3 opções, varia só franquia):")
+    parts.append("\n\nCoberturas inclusas (idênticas nas 3 opções; varia só franquia):")
     for c in opcoes[0].coberturas:
         parts.append(f"\n  - {c}")
     parts.append("\n\nAvisos obrigatórios:")
@@ -156,18 +218,12 @@ async def _handler_cotar_seguro_auto(args: dict) -> dict:
     return {"text": "".join(parts)}
 
 
-# Nome neutro: remove "_mock" do nome (que delatava simulação ao usuário se
-# vazado via meta-pergunta). Descrição não menciona "mock didático" ou
-# "especificação da Adriele" — só comportamento funcional.
-# IMPORTANTE: o disclaimer "Valores simulados pra fins acadêmicos" CONTINUA
-# aparecendo na RESPOSTA ao usuário (transparência exigida pelo projeto) —
-# o que mudou é o que a LLM vê na descrição da tool, não a resposta final.
 cotar_seguro_auto_tool = Tool(
     name="cotar_seguro_auto",
     description=(
         "Calcula uma cotação de seguro auto Porto Inseguro. Devolve 3 opções "
-        "variando a franquia (reduzida, normal e aumentada) — todas no tipo de "
-        "cobertura escolhido pelo usuário. Antes de chamar, colete TODOS os 13 "
+        "variando a franquia (Reduzida, Normal e Aumentada) — todas no tipo de "
+        "cobertura escolhido pelo usuário. Antes de chamar, colete TODOS os 10 "
         "campos abaixo conversando naturalmente com o usuário (NÃO liste os "
         "nomes técnicos dos campos pra ele). Se algum estiver faltando, pergunte."
     ),

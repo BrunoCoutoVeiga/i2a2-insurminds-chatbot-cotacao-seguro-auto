@@ -33,7 +33,7 @@ Antes de mergulhar, alguns termos da área técnica que vão aparecer:
 | **Agente** | O programa que envolve a LLM e dá a ela acesso a "ferramentas" (busca em banco de dados, cálculos, ações). Quando você usa o ChatGPT no celular, você não está falando com a LLM diretamente — está falando com um agente que envolve a LLM. O nosso chatbot é um agente. |
 | **RAG** (Retrieval-Augmented Generation) | Técnica em que, antes da LLM responder, o agente **busca trechos relevantes** numa base de conhecimento e dá esses trechos pra LLM ler. Resultado: a LLM responde com base no nosso conteúdo oficial (Porto, SUSEP), não com base no "conhecimento geral" dela (que pode estar errado ou desatualizado). |
 | **Embedding** (ou "vetor") | Forma de representar um trecho de texto como uma sequência de números que captura o **significado**. Permite buscar "frases parecidas no sentido" em vez de "frases que contenham as mesmas palavras". É o que faz uma pergunta sobre "tempo limite pra avisar sinistro" encontrar um trecho que fala em "prazo do aviso de sinistro" — significado igual, palavras diferentes. |
-| **Tool** (ou "ferramenta") | Função em código Python que a LLM pode "pedir" para o agente executar. Cada tool tem um nome (`retrieve_kb`), uma descrição em português (o que faz, quando usar), e parâmetros. A LLM, quando decide que precisa de uma tool, devolve uma estrutura padronizada pedindo "execute essa tool com esses parâmetros". |
+| **Tool** (ou "ferramenta") | Função em código Python que a LLM pode "pedir" para o agente executar. Cada tool tem um nome (`consultar_porto_inseguro`), uma descrição em português (o que faz, quando usar), e parâmetros. A LLM, quando decide que precisa de uma tool, devolve uma estrutura padronizada pedindo "execute essa tool com esses parâmetros". |
 
 ---
 
@@ -96,8 +96,8 @@ O chatbot tem três fluxos diferentes, e a LLM decide qual usar a cada pergunta:
                 │              │              │
                 ▼              ▼              ▼
         ┌────────────┐  ┌────────────┐  ┌──────────────┐
-        │ retrieve_kb│  │ compute_   │  │ escalar_     │
-        │            │  │ quote_mock │  │ humano       │
+        │ consultar_ │  │ cotar_     │  │ encaminhar_  │
+        │porto_inseg.│  │seguro_auto │  │ atendimento  │
         └─────┬──────┘  └─────┬──────┘  └──────┬───────┘
               │               │                 │
               ▼               ▼                 ▼
@@ -116,16 +116,16 @@ O chatbot tem três fluxos diferentes, e a LLM decide qual usar a cada pergunta:
 
 | Fluxo | Quando | Tool usada |
 |---|---|---|
-| 1. **Tirar dúvida (FAQ)** | "O que é franquia?", "Como aciono um sinistro?", "Qual o prazo de aviso?" | `retrieve_kb` |
-| 2. **Cotação simulada** | "Quanto custa o seguro de um Onix?", "Quero uma cotação pra meu carro" | `compute_quote_mock` |
-| 3. **Encaminhamento humano** | "Quero seguro de vida", "Como reembolsar uma despesa?", "Cancelar minha apólice agora" | `escalar_humano` |
+| 1. **Tirar dúvida (FAQ)** | "O que é franquia?", "Como aciono um sinistro?", "Qual o prazo de aviso?" | `consultar_porto_inseguro` |
+| 2. **Cotação simulada** | "Quanto custa o seguro de um Onix?", "Quero uma cotação pra meu carro" | `cotar_seguro_auto` |
+| 3. **Encaminhamento humano** | "Quero seguro de vida", "Como reembolsar uma despesa?", "Cancelar minha apólice agora" | `encaminhar_atendimento` |
 
 ### Os princípios que regem o agente
 
 Estes vivem no **system prompt** (o "manual de instruções" da LLM):
 
 - **Persona**: corretor de seguros auto, tom claro e cordial, fala português, explica termos técnicos quando o usuário não conhece.
-- **Anti-alucinação**: nunca inventar. Para qualquer informação factual, **deve** usar `retrieve_kb` e **deve** citar a fonte.
+- **Anti-alucinação**: nunca inventar. Para qualquer informação factual, **deve** usar `consultar_porto_inseguro` e **deve** citar a fonte.
 - **Guardrails**: nunca executar transação real (aprovar reembolso, alterar apólice, fechar contrato). Sempre encaminhar para humano nesses casos.
 - **Disclaimer didático**: toda cotação carrega o aviso "valores simulados para fins educacionais, não constituem oferta vinculante da Porto Inseguro".
 - **A favor do segurado** (sugestão da Adriele): quando o input do usuário é ambíguo, interpretar a favor do segurado pra concessão de desconto/cobertura.
@@ -142,15 +142,15 @@ Antes de qualquer pergunta chegar, o agente tem em memória duas coisas que ele 
 
 **(a) O system prompt** — o "manual de instruções":
 
-> *Você é o InsurMind, um assistente especializado em seguro de automóveis da Porto Inseguro, construído para o curso de Agentes de IA da I2A2. Você fala português brasileiro de maneira clara e cordial, sem jargão. Quando o usuário pedir qualquer informação factual (cobertura, franquia, preço, condições contratuais), você DEVE usar a ferramenta `retrieve_kb` para buscar a resposta na base de conhecimento — nunca invente. Quando o usuário pedir uma cotação, você deve coletar os dados necessários e usar `compute_quote_mock`. Se o pedido cair fora do escopo de seguro auto (vida, residencial, frota grande, reembolso, alteração de apólice), use `escalar_humano`. Sempre cite a fonte nas respostas factuais. Toda cotação deve carregar o disclaimer de simulação didática.*
+> *Você é o InsurMind, um assistente especializado em seguro de automóveis da Porto Inseguro, construído para o curso de Agentes de IA da I2A2. Você fala português brasileiro de maneira clara e cordial, sem jargão. Quando o usuário pedir qualquer informação factual (cobertura, franquia, preço, condições contratuais), você DEVE usar a ferramenta `consultar_porto_inseguro` para buscar a resposta na base de conhecimento — nunca invente. Quando o usuário pedir uma cotação, você deve coletar os dados necessários e usar `cotar_seguro_auto`. Se o pedido cair fora do escopo de seguro auto (vida, residencial, frota grande, reembolso, alteração de apólice), use `encaminhar_atendimento`. Sempre cite a fonte nas respostas factuais. Toda cotação deve carregar o disclaimer de simulação didática.*
 
 **(b) A lista de tools disponíveis** (descrita em português pra LLM):
 
 | Nome da tool | Descrição (vista pela LLM) | Parâmetros que aceita |
 |---|---|---|
-| `retrieve_kb` | "Busca trechos relevantes na base de conhecimento — condições gerais e FAQ da Porto Inseguro, glossários da SUSEP e FENACOR. Use sempre que precisar de uma informação factual sobre seguro auto." | `consulta`: a pergunta a buscar (string) |
-| `compute_quote_mock` | "Simula uma cotação de seguro auto a partir do veículo e perfil do condutor. Devolve 3 opções: básico, intermediário, completo." | `modelo`, `ano`, `cep`, `idade`, `sexo`, `garagem`, `bonus`, `sinistros`, `uso` |
-| `escalar_humano` | "Devolve uma mensagem padrão de encaminhamento para atendimento humano. Use quando o pedido estiver fora do escopo de seguro auto." | `motivo`: o que o usuário queria (string) |
+| `consultar_porto_inseguro` | "Busca informações oficiais sobre seguro auto Porto Inseguro (condições gerais, FAQ, glossário). Use sempre antes de afirmar fato sobre coberturas, franquias, sinistro, apólice ou conceitos." | `consulta`: a pergunta a buscar (string) |
+| `cotar_seguro_auto` | "Calcula cotação de seguro auto. Devolve 3 opções variando franquia (Reduzida/Normal/Aumentada), todas no tipo de cobertura escolhido." | 10 campos: `modelo_versao`, `ano`, `capital`, `faixa_etaria`, `sexo`, `uso`, `pernoite`, `classe_bonus`, `cobertura`, `assistencia` |
+| `encaminhar_atendimento` | "Devolve mensagem padrão de encaminhamento ao atendimento humano. Use quando o pedido for outro produto (vida, residencial, etc.) ou exigir ação transacional." | `motivo`: o que o usuário queria (string) |
 
 Note que **a LLM nunca vê o conteúdo da KB direto**. Ela só vê as DESCRIÇÕES das tools. Ela aprende, a partir da descrição, *quando* chamar cada uma.
 
@@ -162,8 +162,8 @@ Antes de mergulhar nos exemplos, um conceito importante: o agente classifica cad
 
 | Categoria | Exemplos | O que o agente faz |
 |---|---|---|
-| **(1) In-scope (auto)** | "O que é franquia?" / "Como aciono um sinistro?" / "Quanto custa o seguro de um Onix?" | Chama uma tool: `retrieve_kb` (FAQ) ou `compute_quote_mock` (cotação). Resposta cita fonte. |
-| **(2) Off-product (outro produto da Porto Inseguro)** | "Quero seguro de vida" / "Cancelar minha apólice" / "Reembolso de despesa médica" | Chama `escalar_humano` com o motivo. Resposta encaminha o usuário pro canal certo (WhatsApp/SAC). |
+| **(1) In-scope (auto)** | "O que é franquia?" / "Como aciono um sinistro?" / "Quanto custa o seguro de um Onix?" | Chama uma tool: `consultar_porto_inseguro` (FAQ) ou `cotar_seguro_auto` (cotação). Resposta cita fonte. |
+| **(2) Off-product (outro produto da Porto Inseguro)** | "Quero seguro de vida" / "Cancelar minha apólice" / "Reembolso de despesa médica" | Chama `encaminhar_atendimento` com o motivo. Resposta encaminha o usuário pro canal certo (WhatsApp/SAC). |
 | **(3) Off-domain (nada a ver com seguros)** | "Quem descobriu o Brasil?" / "Tempo em SP?" / "Me ensina Python" / "Tô deprimido" | **NÃO chama tool nenhuma.** Responde educadamente que só trata seguros auto e oferece ajuda no tema. |
 
 A **diferença crítica** entre (2) e (3):
@@ -192,12 +192,12 @@ A UI captura "O que é franquia?" e passa pro agente. O agente prepara a **prime
 
 #### Passo 2 — A LLM lê e decide chamar uma tool
 
-A LLM recebe tudo isso. Como o system prompt diz "para informação factual, DEVE usar `retrieve_kb`", ela não responde com texto. Em vez disso, ela devolve uma estrutura assim:
+A LLM recebe tudo isso. Como o system prompt diz "para informação factual, DEVE usar `consultar_porto_inseguro`", ela não responde com texto. Em vez disso, ela devolve uma estrutura assim:
 
 ```
 {
   "tipo": "pedido_de_tool",
-  "tool_name": "retrieve_kb",
+  "tool_name": "consultar_porto_inseguro",
   "argumentos": {
     "consulta": "o que é franquia em seguro auto"
   }
@@ -210,8 +210,8 @@ Repare que a LLM **adaptou** a pergunta original ("o que é franquia?") para uma
 
 O agente recebe esse pedido e:
 
-1. Identifica que é a tool `retrieve_kb`
-2. Chama a função `retrieve_kb('o que é franquia em seguro auto')` em Python
+1. Identifica que é a tool `consultar_porto_inseguro`
+2. Chama a função `consultar_porto_inseguro('o que é franquia em seguro auto')` em Python
 3. A função internamente:
    - Converte "o que é franquia em seguro auto" em um vetor numérico (via o modelo de embedding e5-base)
    - Procura no ChromaDB os 5 trechos com vetores mais parecidos — primeiro só nas fontes Porto, e como provavelmente encontra com boa pontuação, não precisa buscar em SUSEP/FENACOR
@@ -269,7 +269,7 @@ O agente recebe esse texto e mostra na UI Streamlit.
 
 ### Exemplo 2 — Pergunta de cotação: "Quanto custa o seguro de um Polo zero?"
 
-Aqui muda porque o agente precisa **coletar 8 dados** especificados pela Adriele antes de calcular. Pra não bombardear o usuário, a LLM agrupa as perguntas em **4 turnos temáticos** (veículo → condutor → uso → cobertura).
+Aqui muda porque o agente precisa **coletar 10 dados** (do tarifador v2.0 do grupo) antes de calcular. Pra não bombardear o usuário, a LLM agrupa as perguntas em **4 turnos temáticos** (veículo → condutor → perfil/uso → produto).
 
 #### Turno 1 — Veículo
 
@@ -277,139 +277,133 @@ Aqui muda porque o agente precisa **coletar 8 dados** especificados pela Adriele
 
 **Primeira chamada à LLM**: system prompt + tools + mensagem do usuário.
 
-**LLM decide**: "é uma cotação, mas eu só tenho o modelo (Polo) e sei que é 0km. Faltam vários dados pra `compute_quote_mock`. Começo perguntando o que falta sobre o **veículo**."
+**LLM decide**: "é uma cotação, mas eu só tenho o modelo (Polo) e sei que é 0km. Faltam vários dados pra `cotar_seguro_auto`. Começo perguntando o que falta sobre o **veículo**."
 
 **LLM responde em texto** (não chama tool):
 
 > "Posso te ajudar com uma simulação! Vou precisar de algumas informações. Começando pelo veículo:
 >
-> - **Modelo** (já tenho: Polo, certo?)
-> - **Versão** (entrada, Highline, GTS, etc.)?
-> - **Ano** do veículo (já que é zero, presumo 2026 — confirma?)"
+> - O Polo tem duas versões cotáveis: **Track 1.0** (entrada) ou **Highline TSI** (topo). Qual delas?
+> - **Ano** do veículo — entendi que é zero. Pra confirmar, qual? (0km, 2026, 2025, 2024 ou 2023)"
 
 #### Turno 2 — Condutor principal
 
-**Usuário:** "Polo Highline 2026."
-
-**Segunda chamada à LLM**: histórico + mensagem.
+**Usuário:** "Polo Highline TSI, 0km."
 
 **LLM responde**:
 
 > "Perfeito. Agora sobre o **principal condutor**:
 >
-> - **Data de nascimento** (DD/MM/AAAA)?
-> - **Sexo** (M/F)?
-> - **Estado civil** (solteiro, casado, divorciado, viúvo ou união estável)?"
+> - **Idade** do condutor principal?
+> - **Sexo** (Masculino ou Feminino)?"
 
-#### Turno 3 — Uso e proteção
+#### Turno 3 — Perfil e uso
 
-**Usuário:** "15/03/1990, masculino, casado."
-
-**Terceira chamada à LLM**: histórico + mensagem.
+**Usuário:** "Tenho 35 anos, masculino."
 
 **LLM responde**:
 
-> "Ótimo. Mais 4 perguntas sobre o uso do veículo:
+> "Ótimo. Mais alguns dados sobre o uso e o perfil:
 >
-> - **CEP de pernoite** (onde o carro fica à noite)?
-> - **Uso**: particular, trabalho ou aplicativo (Uber/99)?
-> - **Garagem** em: casa? trabalho? fins de semana? (sim/não pra cada)
-> - Há algum **condutor com menos de 25 anos** que usa o veículo?"
+> - Em qual **capital** o carro vai pernoitar? (São Paulo, Rio de Janeiro, Belo Horizonte, Porto Alegre, Curitiba ou Brasília)
+> - **Uso**: particular (lazer/trabalho até 30km/dia), alta rodagem (60+ km/dia), comercial-representante ou aplicativo (Uber/99)?
+> - **Onde o carro fica à noite**: garagem fechada, estacionamento ou rua?
+> - **Há quantos anos** você tem seguro sem dar sinistro? (Zero = seguro novo; até 10 anos consecutivos)"
 
-#### Turno 4 — Cobertura
+#### Turno 4 — Produto
 
-**Usuário:** "CEP 01310-100, uso particular, garagem em casa sim, no trabalho sim, fim de semana não, e não tem condutor menor de 25."
-
-**Quarta chamada à LLM**: histórico + mensagem.
+**Usuário:** "São Paulo, particular lazer/trabalho, garagem fechada, tenho 4 anos sem sinistro."
 
 **LLM responde**:
 
-> "Última pergunta — qual o **tipo de cobertura** que você prefere?
+> "Última etapa — escolhas do produto:
 >
-> 1. **Compreensiva** — cobre colisão, incêndio, roubo/furto + danos a terceiros (mais completa)
-> 2. **Roubo/Furto** — cobre apenas roubo, furto e incêndio + danos a terceiros
-> 3. **Básica com terceiros** — cobre só danos a terceiros (RCF-V), sem casco"
+> 1. **Cobertura**:
+>    - **Compreensiva** — colisão + roubo/furto + incêndio + RCF-V (terceiros) + APP (passageiros) — mais completa
+>    - **RF+Inc+RCF-V** — só roubo, furto, incêndio + terceiros (sem colisão, sem APP)
+>    - **Só RCF-V** — só terceiros (sem casco)
+> 2. **Assistência 24h**:
+>    - **Básica** (R$ 180/ano) — guincho 100km + chaveiro + pneu + pane seca
+>    - **Ampliada** (R$ 360/ano) — guincho ilimitado + carro reserva 15 dias + hospedagem"
 
 #### Turno 5 — Cálculo
 
-**Usuário:** "Compreensiva."
+**Usuário:** "Compreensiva e Ampliada."
 
-**Quinta chamada à LLM**: histórico completo + mensagem.
-
-**LLM**: "Agora tenho os 8 dados. Vou chamar `compute_quote_mock`."
+**LLM**: "Agora tenho os 10 dados. Vou chamar `cotar_seguro_auto`."
 
 **LLM devolve pedido de tool**:
 
 ```
 {
   "tipo": "pedido_de_tool",
-  "tool_name": "compute_quote_mock",
+  "tool_name": "cotar_seguro_auto",
   "argumentos": {
-    "modelo": "Polo",
-    "versao": "Highline",
-    "ano": 2026,
-    "cep_pernoite": "01310-100",
-    "data_nascimento": "15/03/1990",
-    "sexo": "M",
-    "estado_civil": "casado",
-    "uso": "particular",
-    "garagem_casa": true,
-    "garagem_trabalho": true,
-    "garagem_fim_de_semana": false,
-    "ha_condutor_menor_25": false,
-    "tipo_cobertura": "compreensiva"
+    "modelo_versao": "VW Polo - Highline TSI",
+    "ano": "0km",
+    "capital": "São Paulo",
+    "faixa_etaria": "31-40",
+    "sexo": "Masculino",
+    "uso": "Particular - lazer/trabalho",
+    "pernoite": "Sim - garagem fechada",
+    "classe_bonus": "Classe 4",
+    "cobertura": "Compreensiva",
+    "assistencia": "Ampliada"
   }
 }
 ```
 
-**Agente executa a tool**. A função `compute_quote_mock` (motor mock por enquanto, planilha real do João Carlos + Adriele depois) calcula e devolve **3 opções de franquia** (todas no tipo escolhido — compreensiva):
+**Agente executa a tool**. A função `compute_quote()` (motor real do grupo, integrado em 2026-05-26 a partir de `Precificador_Seguro_Automóvel_v2.0.xlsx`) **roda o cálculo 3× variando a franquia** e devolve as 3 opções (todas no tipo escolhido — Compreensiva):
 
 ```
 [
   {
-    "nivel_franquia": "reduzida",
-    "valor_franquia": 1800.00,
-    "premio_anual": 4500.00,
-    "coberturas": ["Casco (colisão/incêndio/roubo/furto)", "RCF-V Danos Materiais (R$ 100k)", "RCF-V Danos Corporais (R$ 100k)", "APP", "Assistência 24h"]
+    "nivel_franquia": "Reduzida",
+    "valor_franquia": 2505.20,
+    "premio_anual": 8902.38,
+    "premio_mensal": 741.87,
+    "coberturas": ["Casco — colisão, incêndio, roubo/furto, danos da natureza", "RCF-V — danos a terceiros (LMI R$ 100.000)", "APP — acidentes pessoais de passageiros (LMI R$ 20.000)", "Assistência 24h"]
   },
   {
-    "nivel_franquia": "normal",
-    "valor_franquia": 3000.00,
-    "premio_anual": 3800.00,
-    "coberturas": ["Casco (colisão/incêndio/roubo/furto)", "RCF-V Danos Materiais (R$ 100k)", "RCF-V Danos Corporais (R$ 100k)", "APP", "Assistência 24h"]
+    "nivel_franquia": "Normal",
+    "valor_franquia": 5010.40,
+    "premio_anual": 7680.58,
+    "premio_mensal": 640.05,
+    "coberturas": [...]
   },
   {
-    "nivel_franquia": "aumentada",
-    "valor_franquia": 4500.00,
-    "premio_anual": 3200.00,
-    "coberturas": ["Casco (colisão/incêndio/roubo/furto)", "RCF-V Danos Materiais (R$ 100k)", "RCF-V Danos Corporais (R$ 100k)", "APP", "Assistência 24h"]
+    "nivel_franquia": "Aumentada",
+    "valor_franquia": 10020.80,
+    "premio_anual": 6458.78,
+    "premio_mensal": 538.23,
+    "coberturas": [...]
   }
 ]
 ```
 
 **Sexta chamada à LLM** com esse resultado. A LLM formula a resposta:
 
-> "Aqui estão 3 opções simuladas pra **Polo Highline 2026** (cobertura **compreensiva**), condutor de 35 anos casado em SP, com garagem em casa e trabalho:
+> "Aqui estão 3 opções simuladas pra **Polo Highline TSI 0km** (cobertura **Compreensiva**), condutor masculino 31-40 em São Paulo, com garagem fechada, 4 anos sem sinistro, Assistência Ampliada:
 >
-> **🚗 Franquia Reduzida — R$ 4.500/ano**
-> Franquia em sinistro: R$ 1.800
-> Cobertura: Casco + RCF-V (materiais e corporais até R$ 100k) + APP + Assistência 24h
+> **🚗 Franquia Reduzida — R$ 8.902,38/ano (R$ 741,87/mês)**
+> Franquia em sinistro: R$ 2.505,20 (2% do valor FIPE)
+> Cobertura: Casco + RCF-V (até R$ 100k) + APP (R$ 20k) + Assistência 24h Ampliada
 >
-> **🚗 Franquia Normal — R$ 3.800/ano**
-> Franquia em sinistro: R$ 3.000
-> Cobertura: mesma da opção acima (compreensiva integral)
+> **🚗 Franquia Normal — R$ 7.680,58/ano (R$ 640,05/mês)**
+> Franquia em sinistro: R$ 5.010,40 (4% do valor FIPE)
+> Cobertura: mesma da opção acima (Compreensiva integral)
 >
-> **🚗 Franquia Aumentada — R$ 3.200/ano**
-> Franquia em sinistro: R$ 4.500
-> Cobertura: mesma (compreensiva integral)
+> **🚗 Franquia Aumentada — R$ 6.458,78/ano (R$ 538,23/mês)**
+> Franquia em sinistro: R$ 10.020,80 (8% do valor FIPE)
+> Cobertura: mesma (Compreensiva integral)
 >
 > A diferença entre as 3 está só no equilíbrio: **franquia menor = você paga mais barato no sinistro mas o prêmio anual é maior**. Inversamente: franquia maior = prêmio anual menor mas você assume mais no caso de acidente.
 >
 > *⚠️ Valores simulados para fins educacionais (curso I2A2). Não constituem oferta vinculante da Porto Inseguro. Para uma cotação real, fale com um corretor.*"
 
-#### Sobre o motor de cotação (mock)
+#### Sobre o motor de cotação (real, integrado em 2026-05-26)
 
-Os valores acima saem de uma tabela in-memory com 8 modelos zero-km mais vendidos (Polo, Argo, Onix, T-Cross, Creta, Dolphin, HB20, Kwid) + fatores de risco. **João Carlos e Adriele** estão refinando a versão real em planilha Excel. Quando a planilha estiver pronta, **só o miolo do motor muda** — o contrato `QuoteInput` → `[QuoteOption, QuoteOption, QuoteOption]` permanece idêntico. A LLM, o system prompt, a UI e os testes não são afetados.
+Os valores acima saem do **tarifador real do grupo** (`Precificador_Seguro_Automóvel_v2.0.xlsx`, João Carlos + Adriele, modificado em 2026-05-22). A planilha tem 5 sheets (LEIA-ME, MODELOS, FATORES, CAPITAIS, CÁLCULO) com 16 SKUs em 5 anos (FIPE real), 6 capitais, 11 fatores categóricos (idade/sexo/uso/garagem/bônus/cobertura/franquia/assistência) + carregamento 35% + IOF 7,38%. O script `scripts/import_precificador.py` lê o `.xlsx` uma vez e gera `src/insurmind/quote_tables.py` com dicts Python literais — em prod só roda Python. O `compute_quote()` em `quote.py` replica fielmente as células B17:B25 da aba CÁLCULO (smoke test bate ao centavo).
 
 #### Por que 3 opções **de franquia** (e não 3 tipos de cobertura)?
 
@@ -429,14 +423,14 @@ Este é o caso da categoria **(2) Off-product** — pergunta sobre seguros, mas 
 
 **Chamada à LLM**: system prompt + tools + mensagem.
 
-**LLM identifica**: "isso está fora do meu produto (sou de auto), mas é sobre seguros — system prompt diz pra usar `escalar_humano`."
+**LLM identifica**: "isso está fora do meu produto (sou de auto), mas é sobre seguros — system prompt diz pra usar `encaminhar_atendimento`."
 
 **LLM devolve pedido de tool**:
 
 ```
 {
   "tipo": "pedido_de_tool",
-  "tool_name": "escalar_humano",
+  "tool_name": "encaminhar_atendimento",
   "argumentos": {
     "motivo": "seguro de vida (fora do escopo deste chatbot, que cobre apenas seguro auto)"
   }
@@ -562,13 +556,13 @@ A LLM e os termos técnicos usam o vocabulário do professor — `tool`, `LLM`, 
 │  Foi enviado:                                    │
 │  ▸ system prompt  [▼ ver texto]                 │
 │  ▸ tools disponíveis (3):                       │
-│     • retrieve_kb  (buscar na base)             │
-│     • compute_quote_mock  (simular cotação)     │
-│     • escalar_humano  (encaminhar humano)       │
+│     • consultar_porto_inseguro  (buscar base)   │
+│     • cotar_seguro_auto  (simular cotação)      │
+│     • encaminhar_atendimento  (humano)          │
 │  ▸ pergunta do usuário: "O que é franquia?"     │
 │                                                  │
 │  LLM respondeu — pediu para executar uma tool:  │
-│     tool:        retrieve_kb                     │
+│     tool:        consultar_porto_inseguro       │
 │     parâmetros:  consulta = "o que é franquia   │
 │                  em seguro auto"                 │
 │  [▼ ver formato técnico (JSON)]                 │
@@ -576,7 +570,7 @@ A LLM e os termos técnicos usam o vocabulário do professor — `tool`, `LLM`, 
 │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   │
 │  🟡 Próximo:                                     │
 │  ┌────────────────────────────────────────────┐ │
-│  │ ▶ Executar a tool retrieve_kb              │ │
+│  │ ▶ Executar a tool consultar_porto_inseguro              │ │
 │  │   pedida pela LLM                          │ │
 │  └────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────┘
@@ -585,10 +579,10 @@ A LLM e os termos técnicos usam o vocabulário do professor — `tool`, `LLM`, 
 **Após clicar — Passo 2 done:**
 
 ```
-│  ✅ Passo 2 — Executou retrieve_kb              │
+│  ✅ Passo 2 — Executou consultar_porto_inseguro              │
 │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   │
 │  Tool chamada:                                   │
-│     retrieve_kb(consulta="o que é franquia      │
+│     consultar_porto_inseguro(consulta="o que é franquia      │
 │                           em seguro auto")       │
 │                                                  │
 │  Resultado: 3 trechos encontrados                │
@@ -768,7 +762,7 @@ Todas registradas em detalhe no [RELATORIO.md](../RELATORIO.md), seção por se�
 - Grafo React Flow mostrando User → Agente → LLM/Tools/ChromaDB.
 - Nodes acendem e setas animam conforme o passo atual.
 - Bidirecional: passo 3 mostra seta `LLM → Agente`; passo 6 mostra `Agente → LLM`. A seta sempre aponta no sentido REAL do fluxo.
-- Zona "🧠 RAG" visualmente delimitada (retrieve_kb + ChromaDB envolvidos por um retângulo tracejado), pra alunos perguntarem "onde está o RAG?" e a UI responder visualmente.
+- Zona "🧠 RAG" visualmente delimitada (consultar_porto_inseguro + ChromaDB envolvidos por um retângulo tracejado), pra alunos perguntarem "onde está o RAG?" e a UI responder visualmente.
 
 **3. Eventos refatorados (8 em vez de 5, narrados em gerúndio)**
 - Antes: `llm_call_start`, `llm_text`, `tool_call_requested`, `tool_result`, `final_answer` (perspectiva ambígua).
@@ -806,7 +800,7 @@ Sessão investigativa pós-Sprint 3, antes de partir pro deploy. **Detalhes comp
 
 ### Por que essa frente existiu
 
-Olhando o chatbot funcionar, observamos um caso de uso onde a LLM **iterava 4 vezes** o `retrieve_kb` antes de responder "o que é prêmio?". Cada iteração custava tokens, latência, e parecia ineficiente. Sem visibilidade do que estava acontecendo internamente, era impossível diagnosticar.
+Olhando o chatbot funcionar, observamos um caso de uso onde a LLM **iterava 4 vezes** o `consultar_porto_inseguro` antes de responder "o que é prêmio?". Cada iteração custava tokens, latência, e parecia ineficiente. Sem visibilidade do que estava acontecendo internamente, era impossível diagnosticar.
 
 ### O que foi feito
 
@@ -868,6 +862,6 @@ Resumo dos últimos ajustes pré-entrega (após o addendum de 2026-05-17):
    - Reescrito `README.md` pra ser landing page pública (preservando YAML frontmatter pro HF Spaces)
    - Adicionada seção "Estado de entrega" no `RELATORIO.md` com URLs, métricas e perguntas sugeridas pro avaliador
 
-5. **Tarifador real do grupo (João Carlos + Adriele)**: não chegou em tempo. Mock `cotar_seguro_auto` com 13 campos atende ao DoD. Interface estável permite plug-in posterior em <30 min — só trocar a implementação de `compute_quote_mock` em `quote.py`.
+5. **Tarifador real do grupo (João Carlos + Adriele)**: chegou em 2026-05-26 (`Precificador_Seguro_Automóvel_v2.0.xlsx`, modificado em 2026-05-22). Compilado pra `src/insurmind/quote_tables.py` via `scripts/import_precificador.py`. Contrato `QuoteInput` reescrito (13 → 10 campos: capital em vez de CEP, faixa etária em vez de data de nascimento, classe de bônus + assistência novas, removido estado civil + condutor<25 + 3 booleans de garagem). Smoke test bate ao centavo com a planilha (Polo Highline TSI 2026 / SP / 41-55 / Compreensiva / Reduzida / Ampliada → R$ 6.974,66/ano). Detalhes na sessão "2026-05-26 — Integração do tarifador real" do `RELATORIO.md`.
 
 **Status final**: trabalho considerado **concluído**. Todos os 6 critérios de "pronto" do plano original (João Carlos, 14/05) foram atingidos. Detalhes em `RELATORIO.md` seção "3. Estado de entrega".

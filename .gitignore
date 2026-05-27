@@ -30,6 +30,14 @@ htmlcov/
 data/chroma/
 
 # =============================================================================
+# Planilha do precificador — fora do repo (contém metadados Excel com nome
+# de membro do grupo). O conteúdo numérico já está versionado em
+# `src/insurmind/quote_tables.py` (gerado via scripts/import_precificador.py).
+# Bruno mantém uma cópia local; regerar `quote_tables.py` exige a planilha.
+# =============================================================================
+Precificador_Seguro_Autom*.xlsx
+
+# =============================================================================
 # Modelos / caches de embedding cacheados (~500MB) — ficam em ~/.cache/
 # Mantido aqui pra documentar intent caso algo escape do user dir
 # =============================================================================
@@ -68,3 +76,6 @@ desktop.ini
 *.swp
 *.swo
 *~
+
+# Arquivos de lock do Microsoft Office (aparecem enquanto o arquivo está aberto)
+~$*

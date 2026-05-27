@@ -1,197 +1,112 @@
-"""Motor de cotação simulado (mock) — InsurMind / Porto Inseguro.
+"""Motor de cotação do seguro auto — InsurMind / Porto Inseguro.
+
+Replica EXATAMENTE a aba CÁLCULO da planilha
+`Precificador_Seguro_Automóvel_v2.0.xlsx` (João Carlos + Adriele, 2026-05-22).
 
 Contrato `QuoteInput` -> `list[QuoteOption]` com 3 opções variando franquia
-(reduzida / normal / aumentada), todas no tipo de cobertura escolhido pelo
-usuário. Especificação completa em `docs/visao-geral-do-chatbot.md` §6 e em
-`RELATORIO.md` ("2026-05-16 — Especificação do mock de cotação").
+(Reduzida / Normal / Aumentada), todas no tipo de cobertura escolhido pelo
+usuário. O usuário NÃO escolhe franquia — variamos as 3 internamente pra
+cumprir o DoD do João Carlos ("3 opções de preço com franquia").
 
-**Interface estável**: quando a planilha real do João Carlos + Adriele chegar,
-**substitua apenas o miolo de `compute_quote_mock`** mantendo a assinatura
-idêntica. Toda a cadeia acima (LLM, agent, UI, testes) permanece igual.
+Tabelas em `quote_tables.py` (geradas por `scripts/import_precificador.py`).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Literal
+
+from .quote_tables import (
+    FIPE_POR_CHAVE_ANO, FATOR_MODELO_POR_CHAVE,
+    TAXA_CASCO, TAXA_RCFV, TAXA_APP, LMI_RCFV, LMI_APP,
+    FATOR_COBERTURA_CASCO, FATOR_COBERTURA_APP, FATOR_FRANQUIA,
+    FATOR_IDADE, FATOR_SEXO, FATOR_USO, FATOR_GARAGEM, FATOR_BONUS,
+    VALOR_ASSISTENCIA, CARREGAMENTO, IOF, FATOR_REGIAO,
+)
 
 
 # =============================================================================
 # Tipos do contrato
 # =============================================================================
 
-EstadoCivil = Literal["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]
-Sexo = Literal["M", "F"]
-Uso = Literal["particular", "trabalho", "aplicativo"]
-TipoCobertura = Literal["compreensiva", "roubo_furto", "basica_terceiros"]
-NivelFranquia = Literal["reduzida", "normal", "aumentada"]
+Ano = Literal["0km", "2026", "2025", "2024", "2023"]
+Sexo = Literal["Masculino", "Feminino"]
+Cobertura = Literal["Compreensiva", "RF+Inc+RCF-V", "Só RCF-V"]
+Pernoite = Literal["Sim - garagem fechada", "Sim - estacionamento", "Não - rua"]
+Assistencia = Literal["Básica", "Ampliada"]
+Franquia = Literal["Reduzida", "Normal", "Aumentada"]
+FaixaEtaria = Literal["18-25", "26-30", "31-40", "41-55", "56-65", "66+"]
 
 
 @dataclass(frozen=True)
 class QuoteInput:
-    """8 perguntas da especificação Adriele (2026-05-16). 13 campos no total."""
-    # Veículo
-    modelo: str                          # ex.: "Polo", "Onix"
-    versao: str                          # ex.: "Highline", "entrada"
-    ano: int                             # ex.: 2026
-
-    # Localização
-    cep_pernoite: str                    # 8 dígitos (com ou sem hífen)
-
-    # Condutor principal
-    data_nascimento: str                 # "DD/MM/YYYY"
+    """10 campos do precificador v2.0. Franquia NÃO entra — variamos 3x internamente."""
+    modelo_versao: str       # uma das 16 chaves de FATOR_MODELO_POR_CHAVE
+    ano: Ano
+    capital: str             # uma das 6 chaves de FATOR_REGIAO
+    faixa_etaria: FaixaEtaria
     sexo: Sexo
-    estado_civil: EstadoCivil
-
-    # Uso e proteção
-    uso: Uso
-    garagem_casa: bool
-    garagem_trabalho: bool
-    garagem_fim_de_semana: bool
-
-    # Outros condutores
-    ha_condutor_menor_25: bool
-
-    # Tipo de cobertura escolhida
-    tipo_cobertura: TipoCobertura
+    uso: str                 # uma das 4 chaves de FATOR_USO
+    pernoite: Pernoite
+    classe_bonus: str        # uma das 11 chaves de FATOR_BONUS
+    cobertura: Cobertura
+    assistencia: Assistencia
 
 
 @dataclass(frozen=True)
 class QuoteOption:
-    nivel_franquia: NivelFranquia
-    valor_franquia: Decimal
+    nivel_franquia: Franquia
+    valor_franquia: Decimal | None   # None se cobertura = "Só RCF-V" (sem casco)
     premio_anual: Decimal
+    premio_mensal: Decimal
     coberturas: list[str]
     avisos: list[str] = field(default_factory=list)
 
 
+class QuoteUnavailableError(Exception):
+    """Combinação modelo×ano inexistente na planilha (FIPE = '-')."""
+    def __init__(self, modelo_versao: str, ano: str, anos_disponiveis: list[str]):
+        self.modelo_versao = modelo_versao
+        self.ano = ano
+        self.anos_disponiveis = anos_disponiveis
+        super().__init__(
+            f"{modelo_versao!r} não tem valor FIPE para {ano!r}. "
+            f"Anos disponíveis: {', '.join(anos_disponiveis)}."
+        )
+
+
 # =============================================================================
-# Tabelas do tarifador mock (calibradas a mão por Bruno em 2026-05-16,
-# refletindo ordem de grandeza realista; serão substituídas pela planilha
-# do grupo quando estiver pronta).
-#
-# **Valores in-memory, didáticos, NÃO refletem mercado real.**
+# Constantes auxiliares
 # =============================================================================
 
-# Valor médio zero-km dos 8 modelos mais vendidos no Brasil
-MODELOS_VALOR_FIPE: dict[str, Decimal] = {
-    "polo":    Decimal("95000"),
-    "argo":    Decimal("78000"),
-    "onix":    Decimal("88000"),
-    "t-cross": Decimal("140000"),
-    "creta":   Decimal("135000"),
-    "dolphin": Decimal("160000"),  # BYD elétrico
-    "hb20":    Decimal("85000"),
-    "kwid":    Decimal("68000"),
+# Franquia em sinistro de casco como % do FIPE. A planilha não explicita o valor
+# em R$ — só os fatores que afetam o prêmio. Adoto razão 1:2:4 que a LEIA-ME
+# da planilha declara: "Reduzida = 50% da normal" e "Aumentada = 200% da normal".
+# Base 4% = típico de mercado pra carros nesta faixa de valor.
+PCT_FRANQUIA: dict[Franquia, Decimal] = {
+    "Reduzida":  Decimal("0.02"),  # 2% do FIPE
+    "Normal":    Decimal("0.04"),  # 4% do FIPE
+    "Aumentada": Decimal("0.08"),  # 8% do FIPE
 }
 
-# Percentual base do prêmio anual sobre o valor FIPE, por tipo de cobertura
-PREMIO_BASE_PCT: dict[TipoCobertura, Decimal] = {
-    "compreensiva":     Decimal("0.045"),  # 4.5% — cobre tudo
-    "roubo_furto":      Decimal("0.028"),  # 2.8% — só roubo/furto/incêndio + RCF-V
-    "basica_terceiros": Decimal("0.012"),  # 1.2% — só RCF-V (terceiros)
-}
-
-# Fatores multiplicativos sobre o prêmio base
-FATOR_SEXO: dict[Sexo, Decimal] = {
-    "M": Decimal("1.05"),
-    "F": Decimal("0.95"),
-}
-
-FATOR_ESTADO_CIVIL: dict[EstadoCivil, Decimal] = {
-    "solteiro":      Decimal("1.05"),
-    "casado":        Decimal("0.95"),
-    "uniao_estavel": Decimal("0.95"),
-    "divorciado":    Decimal("1.00"),
-    "viuvo":         Decimal("1.00"),
-}
-
-FATOR_USO: dict[Uso, Decimal] = {
-    "particular": Decimal("1.00"),
-    "trabalho":   Decimal("1.15"),
-    "aplicativo": Decimal("1.40"),
-}
-
-# Fator por idade (faixas)
-def _fator_idade(idade: int) -> Decimal:
-    if idade < 25:   return Decimal("1.45")
-    if idade < 30:   return Decimal("1.15")
-    if idade < 40:   return Decimal("1.00")
-    if idade < 50:   return Decimal("0.92")
-    if idade < 65:   return Decimal("0.88")
-    return Decimal("0.95")  # idosos: leve aumento
-
-# Fator por nº de "garagem sim" (0 a 3)
-_FATOR_GARAGEM = {
-    0: Decimal("1.20"),
-    1: Decimal("1.05"),
-    2: Decimal("0.95"),
-    3: Decimal("0.88"),
-}
-
-FATOR_MENOR_25 = Decimal("1.25")  # se ha_condutor_menor_25 = True
-
-# Fator por região (2 primeiros dígitos do CEP). Cobertura simplificada:
-# capitais SP/RJ caras, sul/SC/PR baratos, NE médio.
-def _fator_regiao(cep: str) -> Decimal:
-    digits = "".join(c for c in cep if c.isdigit())
-    if len(digits) < 2:
-        return Decimal("1.00")
-    prefix = int(digits[:2])
-    # SP capital + grande SP
-    if 1 <= prefix <= 9:    return Decimal("1.25")
-    if 10 <= prefix <= 19:  return Decimal("1.15")
-    # RJ capital + interior
-    if 20 <= prefix <= 23:  return Decimal("1.20")
-    if 24 <= prefix <= 28:  return Decimal("1.05")
-    # MG
-    if 30 <= prefix <= 39:  return Decimal("0.98")
-    # BA / SE
-    if 40 <= prefix <= 49:  return Decimal("1.05")
-    # NE (PE, AL, PB, RN, CE, PI, MA)
-    if 50 <= prefix <= 65:  return Decimal("1.08")
-    # Norte (PA, AM, AC, RR, RO, AP, TO)
-    if 66 <= prefix <= 77:  return Decimal("1.12")
-    # Centro-oeste (DF, GO, MT, MS)
-    if 70 <= prefix <= 79:  return Decimal("1.02")
-    # Sul (PR, SC, RS) — historicamente menor sinistralidade
-    if 80 <= prefix <= 99:  return Decimal("0.92")
-    return Decimal("1.00")
-
-# Configuração das franquias (% do valor do veículo + ajuste do prêmio)
-FRANQUIA_CONFIG: dict[NivelFranquia, tuple[Decimal, Decimal]] = {
-    # nivel: (pct_franquia_sobre_fipe, ajuste_premio)
-    "reduzida":  (Decimal("0.020"), Decimal("1.18")),   # franquia 2% / prêmio +18%
-    "normal":    (Decimal("0.035"), Decimal("1.00")),   # franquia 3.5% / prêmio base
-    "aumentada": (Decimal("0.055"), Decimal("0.85")),   # franquia 5.5% / prêmio -15%
-}
-
-# Lista de coberturas incluídas por tipo
-COBERTURAS_POR_TIPO: dict[TipoCobertura, list[str]] = {
-    "compreensiva": [
-        "Casco (colisão, incêndio, roubo/furto)",
-        "RCF-V Danos Materiais a terceiros (LMI R$ 100.000)",
-        "RCF-V Danos Corporais a terceiros (LMI R$ 100.000)",
-        "APP — Acidentes Pessoais a Passageiros (LMI R$ 20.000)",
-        "Assistência 24h básica (guincho até 300km, chaveiro, pane seca)",
+COBERTURAS_INCLUSAS: dict[Cobertura, list[str]] = {
+    "Compreensiva": [
+        "Casco — colisão, incêndio, roubo/furto, danos da natureza",
+        f"RCF-V — danos a terceiros (LMI R$ {int(LMI_RCFV):,})".replace(",", "."),
+        f"APP — acidentes pessoais de passageiros (LMI R$ {int(LMI_APP):,})".replace(",", "."),
+        "Assistência 24h (conforme nível escolhido)",
     ],
-    "roubo_furto": [
-        "Casco apenas para roubo, furto e incêndio (sem colisão)",
-        "RCF-V Danos Materiais a terceiros (LMI R$ 100.000)",
-        "RCF-V Danos Corporais a terceiros (LMI R$ 100.000)",
-        "Assistência 24h básica (guincho até 300km, chaveiro)",
+    "RF+Inc+RCF-V": [
+        "Casco SOMENTE para roubo, furto e incêndio (sem colisão)",
+        f"RCF-V — danos a terceiros (LMI R$ {int(LMI_RCFV):,})".replace(",", "."),
+        "Assistência 24h (conforme nível escolhido)",
     ],
-    "basica_terceiros": [
-        "RCF-V Danos Materiais a terceiros (LMI R$ 50.000)",
-        "RCF-V Danos Corporais a terceiros (LMI R$ 50.000)",
+    "Só RCF-V": [
+        f"RCF-V — danos a terceiros (LMI R$ {int(LMI_RCFV):,})".replace(",", "."),
+        "Sem casco e sem APP",
     ],
 }
-
-# Carregamento (despesas + comissão) e tributo
-CARREGAMENTO = Decimal("1.30")   # 30% sobre o prêmio puro
-IOF = Decimal("1.0738")          # 7.38% sobre o prêmio líquido
 
 AVISOS_PADRAO = [
     "⚠️ Valores simulados para fins acadêmicos — trabalho do curso I2A2 InsurMinds.",
@@ -201,107 +116,128 @@ AVISOS_PADRAO = [
 
 
 # =============================================================================
-# Cálculos auxiliares
+# Cálculo (espelho fiel da aba CÁLCULO da planilha v2.0)
 # =============================================================================
 
-def _idade_do_condutor(data_nascimento: str, hoje: date | None = None) -> int:
-    """Calcula idade em anos completos. `hoje` permite testes determinísticos."""
-    hoje = hoje or date.today()
-    nasc = datetime.strptime(data_nascimento, "%d/%m/%Y").date()
-    idade = hoje.year - nasc.year - ((hoje.month, hoje.day) < (nasc.month, nasc.day))
-    return max(0, idade)
-
-
-def _valor_fipe(modelo: str) -> Decimal:
-    """Busca o valor FIPE do modelo (case-insensitive); fallback didático se desconhecido."""
-    key = modelo.strip().lower()
-    if key in MODELOS_VALOR_FIPE:
-        return MODELOS_VALOR_FIPE[key]
-    # Fallback: média dos 8 modelos. O agente também pode escalar humano nesses casos.
-    media = sum(MODELOS_VALOR_FIPE.values(), Decimal("0")) / Decimal(len(MODELOS_VALOR_FIPE))
-    return media.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
-
-
 def _arred(v: Decimal) -> Decimal:
-    """Arredonda pra 2 casas decimais (centavos)."""
     return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-# =============================================================================
-# Função principal
-# =============================================================================
+def _resolver_is_fipe(modelo_versao: str, ano: str) -> Decimal:
+    """Lookup IS_FIPE. Levanta QuoteUnavailableError se par ausente."""
+    if modelo_versao not in FATOR_MODELO_POR_CHAVE:
+        raise ValueError(
+            f"Modelo {modelo_versao!r} não está no catálogo. Modelos válidos: "
+            f"{list(FATOR_MODELO_POR_CHAVE.keys())}"
+        )
+    if (modelo_versao, ano) not in FIPE_POR_CHAVE_ANO:
+        anos = sorted(a for (m, a) in FIPE_POR_CHAVE_ANO if m == modelo_versao)
+        raise QuoteUnavailableError(modelo_versao, ano, anos)
+    return FIPE_POR_CHAVE_ANO[(modelo_versao, ano)]
 
-def compute_quote_mock(input: QuoteInput, _hoje: date | None = None) -> list[QuoteOption]:
-    """Devolve 3 opções de franquia (reduzida/normal/aumentada) para o tipo
-    de cobertura escolhido pelo usuário. Determinístico — sem aleatoriedade.
 
-    `_hoje` é injetável apenas pra testes; em uso normal usa `date.today()`.
+def _premio_uma_franquia(input: QuoteInput, franquia: Franquia) -> tuple[Decimal, Decimal | None]:
+    """Calcula prêmio total anual + valor da franquia em sinistro para UMA franquia.
+
+    Replica as células B17:B25 da aba CÁLCULO (planilha v2.0).
+    Retorna (premio_total_anual, valor_franquia_sinistro).
     """
-    valor_fipe = _valor_fipe(input.modelo)
-    idade = _idade_do_condutor(input.data_nascimento, _hoje)
+    is_fipe = _resolver_is_fipe(input.modelo_versao, input.ano)
 
-    # Prêmio puro = valor × pct base × cadeia de fatores
-    premio_puro = valor_fipe * PREMIO_BASE_PCT[input.tipo_cobertura]
-    premio_puro *= _fator_idade(idade)
-    premio_puro *= FATOR_SEXO[input.sexo]
-    premio_puro *= FATOR_ESTADO_CIVIL[input.estado_civil]
-    premio_puro *= FATOR_USO[input.uso]
-    premio_puro *= _FATOR_GARAGEM[
-        sum([input.garagem_casa, input.garagem_trabalho, input.garagem_fim_de_semana])
-    ]
-    if input.ha_condutor_menor_25:
-        premio_puro *= FATOR_MENOR_25
-    premio_puro *= _fator_regiao(input.cep_pernoite)
+    # Lookups de fatores (espelhando INDEX/MATCH e VLOOKUP da planilha)
+    f_modelo    = FATOR_MODELO_POR_CHAVE[input.modelo_versao]
+    f_regiao    = FATOR_REGIAO[input.capital]
+    f_idade     = FATOR_IDADE[input.faixa_etaria]
+    f_sexo      = FATOR_SEXO[input.sexo]
+    f_uso       = FATOR_USO[input.uso]
+    f_garagem   = FATOR_GARAGEM[input.pernoite]
+    f_bonus     = FATOR_BONUS[input.classe_bonus]
+    f_cob_casco = FATOR_COBERTURA_CASCO[input.cobertura]
+    f_cob_app   = FATOR_COBERTURA_APP[input.cobertura]
+    f_franquia  = FATOR_FRANQUIA[franquia]
+    val_assist  = VALOR_ASSISTENCIA[input.assistencia]
 
-    # Aplicar carregamento e IOF
-    premio_liquido = premio_puro * CARREGAMENTO
-    premio_final_base = premio_liquido * IOF
+    # Casco (B17) — fator zero se cobertura = "Só RCF-V"
+    premio_casco = (
+        is_fipe * TAXA_CASCO * f_modelo * f_regiao * f_cob_casco * f_franquia
+        * f_idade * f_sexo * f_uso * f_garagem * f_bonus
+    )
 
-    coberturas = COBERTURAS_POR_TIPO[input.tipo_cobertura]
+    # RCF-V (B18) — F_Cobertura_RCFV é sempre 1, então omitido. F_Sexo e F_Garagem aplicados.
+    premio_rcfv = LMI_RCFV * TAXA_RCFV * f_idade * f_sexo * f_uso * f_garagem * f_bonus
+
+    # APP (B19) — só na Compreensiva (f_cob_app=0 nas outras zera). Sem F_Sexo nem F_Garagem.
+    premio_app = LMI_APP * TAXA_APP * f_cob_app * f_idade * f_uso * f_bonus
+
+    # Assistência 24h (B20) — valor fixo, sem aplicação de fatores
+    premio_assist = val_assist
+
+    # Prêmio puro total (B21)
+    premio_puro = premio_casco + premio_rcfv + premio_app + premio_assist
+
+    # Carregamento (B22) e líquido (B23): premio_puro / (1 - 0.35)
+    premio_liquido = premio_puro / (Decimal("1") - CARREGAMENTO)
+
+    # IOF (B24) e prêmio total anual (B25)
+    premio_total = premio_liquido * (Decimal("1") + IOF)
+
+    # Valor da franquia em sinistro de casco (% do FIPE). N/A se cobertura sem casco.
+    valor_franquia = None
+    if input.cobertura != "Só RCF-V":
+        valor_franquia = _arred(is_fipe * PCT_FRANQUIA[franquia])
+
+    return _arred(premio_total), valor_franquia
+
+
+def compute_quote(input: QuoteInput) -> list[QuoteOption]:
+    """Devolve 3 opções de franquia (Reduzida/Normal/Aumentada) pro tipo de
+    cobertura escolhido. Determinístico.
+
+    Levanta `QuoteUnavailableError` se o par (modelo, ano) não existe na planilha.
+    """
     opcoes: list[QuoteOption] = []
-
-    for nivel in ("reduzida", "normal", "aumentada"):
-        pct_franquia, ajuste = FRANQUIA_CONFIG[nivel]
+    for nivel in ("Reduzida", "Normal", "Aumentada"):
+        premio_total, valor_franquia = _premio_uma_franquia(input, nivel)
         opcoes.append(QuoteOption(
             nivel_franquia=nivel,
-            valor_franquia=_arred(valor_fipe * pct_franquia),
-            premio_anual=_arred(premio_final_base * ajuste),
-            coberturas=coberturas,
+            valor_franquia=valor_franquia,
+            premio_anual=premio_total,
+            premio_mensal=_arred(premio_total / Decimal("12")),
+            coberturas=COBERTURAS_INCLUSAS[input.cobertura],
             avisos=AVISOS_PADRAO,
         ))
-
     return opcoes
 
 
 # =============================================================================
-# Smoke test mínimo — `python -m insurmind.quote` roda um exemplo determinístico
+# Smoke test — replica o exemplo da própria planilha v2.0
 # =============================================================================
 
 if __name__ == "__main__":
-    # Exemplo da spec da Adriele: Polo Highline 2026, condutor 35 anos casado em SP,
-    # garagem casa+trabalho, sem condutor jovem, cobertura compreensiva.
+    # Exemplo da planilha (CÁLCULO B4:B14): VW Polo Highline TSI 2026, SP,
+    # 41-55, Masculino, Particular lazer/trabalho, garagem fechada, Classe 4,
+    # Compreensiva, FRANQUIA Reduzida, Assistência Ampliada → R$ 6.974,66/ano.
     sample = QuoteInput(
-        modelo="Polo",
-        versao="Highline",
-        ano=2026,
-        cep_pernoite="01310-100",
-        data_nascimento="15/03/1990",
-        sexo="M",
-        estado_civil="casado",
-        uso="particular",
-        garagem_casa=True,
-        garagem_trabalho=True,
-        garagem_fim_de_semana=False,
-        ha_condutor_menor_25=False,
-        tipo_cobertura="compreensiva",
+        modelo_versao="VW Polo - Highline TSI",
+        ano="2026",
+        capital="São Paulo",
+        faixa_etaria="41-55",
+        sexo="Masculino",
+        uso="Particular - lazer/trabalho",
+        pernoite="Sim - garagem fechada",
+        classe_bonus="Classe 4",
+        cobertura="Compreensiva",
+        assistencia="Ampliada",
     )
-    # Usa data fixa pra determinismo
-    opcoes = compute_quote_mock(sample, _hoje=date(2026, 5, 16))
-
-    print(f"Cotação Polo Highline 2026, cobertura compreensiva, SP:")
+    opcoes = compute_quote(sample)
+    print(f"Cotação {sample.modelo_versao} {sample.ano} | {sample.capital} | "
+          f"{sample.sexo} {sample.faixa_etaria} | {sample.cobertura} | "
+          f"Assistência {sample.assistencia}\n")
     for o in opcoes:
-        print(f"  [{o.nivel_franquia:>10}]  prêmio anual R$ {o.premio_anual:>10,.2f}  "
-              f"franquia R$ {o.valor_franquia:>10,.2f}")
-    print(f"\nCoberturas inclusas ({len(opcoes[0].coberturas)}):")
-    for c in opcoes[0].coberturas:
-        print(f"  • {c}")
+        franq = f"R$ {o.valor_franquia:>10,.2f}" if o.valor_franquia else "N/A (sem casco)"
+        print(f"  Franquia {o.nivel_franquia:>10}:  "
+              f"prêmio anual R$ {o.premio_anual:>10,.2f}  "
+              f"(mensal R$ {o.premio_mensal:>8,.2f})  "
+              f"franquia em sinistro {franq}")
+    print(f"\nReferência da planilha (CÁLCULO B25, franquia Reduzida): R$ 6.974,66/ano")
+    print(f"Computado pelo código (franquia Reduzida):                R$ {opcoes[0].premio_anual:,.2f}/ano")

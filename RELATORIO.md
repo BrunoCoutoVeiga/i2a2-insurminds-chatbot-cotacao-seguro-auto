@@ -1390,6 +1390,173 @@ Re-rodada do script aplicou **11 substituições** em `data/kb/09-porto-faq.md` 
 
 ---
 
+### 2026-05-26 — Integração do tarifador real do grupo (Precificador v2.0)
+
+Em 2026-05-26, **7 dias antes do prazo** e 7 dias após o snapshot de "entrega concluída" (2026-05-19), o tarifador real do grupo finalmente chegou: `Precificador_Seguro_Automóvel_v2.0.xlsx` (autor João Carlos Mendonça, última modificação 2026-05-22, 27KB com 5 sheets). Bruno autorizou substituir o mock pelo motor real — esta sessão registra a migração.
+
+#### Filosofia adotada
+
+Bruno deixou claro o princípio de trabalho: **artefatos do grupo são sugestões, não specs.** Bruno + Claude decidem inconsistências sem voltar a perguntar. O time é assíncrono (WhatsApp), o ciclo de pergunta-resposta quebra o fluxo de execução. Aplicado a todas as decisões abaixo.
+
+#### Pivô da interface de input
+
+O contrato `QuoteInput` foi totalmente reescrito. A "interface estável" do mock previa 13 campos. A planilha trouxe 11 inputs (3 deles serão tratados de forma diferente). Diff:
+
+| Mock antigo (Adriele, 2026-05-16) | Planilha v2.0 | Tratamento |
+|---|---|---|
+| `modelo`, `versao`, `ano` (3 campos livres) | `modelo_versao` (1 das 16 chaves do catálogo) + `ano` (1 de 5: 0km/2026/2025/2024/2023) | Mantém 2 campos, mas vira enum fechado |
+| `cep_pernoite` (8 dígitos com prefixo regional) | `capital` (1 das 6: SP/RJ/BH/POA/CWB/BSB) | Granularidade reduzida — alinha com o que o tarifador realmente usa |
+| `data_nascimento` + cálculo de idade | `faixa_etaria` (6 faixas categóricas) | LLM faz a conversão idade → faixa naturalmente |
+| `estado_civil` (5 valores) | _ausente_ | **Removido** — não entra no cálculo |
+| `garagem_casa`/`_trabalho`/`_fim_de_semana` (3 booleans) | `pernoite` (1 categoria com 3 opções) | Colapsa 3 perguntas em 1 |
+| `ha_condutor_menor_25` (bool) | _ausente_ | **Removido** — LEIA-ME admite a limitação explicitamente |
+| `uso` (3 valores) | `uso` (4 categorias com "alta rodagem" separado) | Ampliado |
+| `tipo_cobertura` (`compreensiva`/`roubo_furto`/`basica_terceiros`) | `cobertura` (`Compreensiva`/`RF+Inc+RCF-V`/`Só RCF-V`) | Renomeado: "RF+Inc+RCF-V" é mais preciso que `roubo_furto` (inclui incêndio explicitamente) |
+| _ausente_ | `classe_bonus` (Classe 0 a 10) | **Novo** — fator forte que Adriele tinha excluído da spec mas a planilha trouxe |
+| _ausente_ | `assistencia` (Básica/Ampliada) | **Novo** — R$ 180 ou R$ 360/ano |
+
+**Total**: contrato cai de 13 campos pra **10 campos**. Mais enxuto, mais alinhado com a prática real do tarifador.
+
+#### Decisão registrada — franquia: input ou output?
+
+A planilha trata franquia como **input** (usuário escolhe Reduzida/Normal/Aumentada). O mock antigo tratava como **output** (devolvia 3 opções).
+
+| Opção | Tradeoff |
+|---|---|
+| (A) Adotar como input (perguntar ao usuário) | Fiel à planilha mas viola o DoD do João Carlos ("3 opções de preço com franquia") e quebra UX já validada. |
+| **(B) Manter como output — rodar motor 3× variando franquia internamente** | Preserva DoD, system prompt, UX e narração ("aqui estão 3 opções"). Custo: 3 cálculos por cotação — irrelevante. |
+
+**Escolha: opção B.** Implementada em `compute_quote()` que itera sobre `("Reduzida", "Normal", "Aumentada")` e devolve `list[QuoteOption]` de 3 elementos.
+
+#### Decisão registrada — Excel embutido vs portagem em Python
+
+| Opção | Tradeoff |
+|---|---|
+| (A) Ler `.xlsx` em runtime via `openpyxl` | Ajustes da planilha entram sem código; mas Excel vira dep runtime, deploy carrega 27KB de XML, e qualquer mudança na planilha quebra deploy silenciosamente. |
+| **(B) Compilar a planilha pra Python (`scripts/import_precificador.py` → `quote_tables.py`)** | Excel não é fonte runtime, é spec. Diff revisável em git. Sem dep `openpyxl` em prod. Mudanças do grupo = rodar script + comitar diff. |
+
+**Escolha: opção B.** Script `scripts/import_precificador.py` lê o `.xlsx` uma vez e gera `src/insurmind/quote_tables.py` com `Decimal` literals — 17 estruturas de dado (16 SKUs + FIPE_POR_CHAVE_ANO + 11 dicts de fatores + 6 capitais + 2 escalares).
+
+#### Inconsistências da planilha — todas resolvidas localmente
+
+**Inconsistência 1**: fórmula da LEIA-ME (A13) consolida `F_Idade × F_Uso × F_Bônus` aplicados ao prêmio puro total; as células CÁLCULO aplicam **por componente**, com aplicação **desigual** entre Casco, RCF-V e APP (Casco aplica todos os fatores de condutor; APP omite F_Sexo e F_Garagem).
+
+**Resolução**: adotadas as **células como verdade canônica**. As células são o que João/Adriele testaram e validaram (o exemplo `Polo Highline 2026 → R$ 6.974,66` está calculado a partir das células). A exclusão de F_Sexo/F_Garagem em APP é **atuarialmente defensável** — APP indeniza passageiros em sinistro coberto, então sexo do condutor e local de pernoite não afetam frequência de lesão de passageiros uma vez ocorrido o acidente. Replicado fielmente em `quote.py::_premio_uma_franquia`.
+
+**Inconsistência 2**: SKUs com FIPE = `'-'` em algum ano (Dolphin Mini 2023, Plus/EV 2023, HB20 Comfort 2025, HB20 Platinum 2025, Kwid Iconic 2023+2024+2025 = 7 ausências de 80 combinações).
+
+**Resolução**: combinações ausentes são **omitidas** do índice `FIPE_POR_CHAVE_ANO` no script importador. Em runtime, `compute_quote()` levanta `QuoteUnavailableError(modelo, ano, anos_disponiveis)`. O handler da tool `cotar_seguro_auto` captura e devolve mensagem amigável pra LLM transmitir ao usuário ("Para o Kwid Iconic não tenho cotação 2023 — só 0km e 2026. Qual prefere?").
+
+**Inconsistência 3** (texto da LEIA-ME): "8 modelos × 2 versões × 5 anos = 80 combinações". Falso positivo da análise inicial — 8 × 2 × 5 = 80, e 16 SKUs × 5 anos = 80. Ambas batem.
+
+#### Decisão registrada — valor da franquia em sinistro
+
+A planilha **não especifica** o valor da franquia em sinistro em R$ — só o fator que multiplica o prêmio de casco. A LEIA-ME declara apenas a razão: "Reduzida = 50% da normal", "Aumentada = 200% da normal".
+
+**Escolha**: adotada razão **2% / 4% / 8% do FIPE** (proporção 1:2:4 alinhada com a LEIA-ME, base 4% = típico de mercado pra carros nesta faixa de valor). Documentado em `PCT_FRANQUIA` em `quote.py`. Quando Adriele especificar valores diferentes, ajusta-se 3 constantes.
+
+#### Validação numérica
+
+Smoke test do `python -m insurmind.quote` reproduzindo o exemplo do CÁLCULO da planilha (Polo Highline TSI 2026 / São Paulo / 41-55 / Masculino / Particular lazer-trabalho / garagem fechada / Classe 4 / Compreensiva / Assistência Ampliada / Franquia Reduzida):
+
+| Métrica | Planilha v2.0 (CÁLCULO B25) | Código Python | Status |
+|---|---|---|---|
+| Prêmio anual | R$ 6.974,66 | R$ 6.974,66 | ✅ bate ao centavo |
+| Parcela mensal | R$ 581,22 | R$ 581,22 | ✅ |
+
+As 3 opções de franquia agora geradas:
+
+| Franquia | Prêmio anual | Franquia em sinistro |
+|---|---|---|
+| Reduzida | R$ 6.974,66 | R$ 2.231,18 (2% FIPE R$ 111.559) |
+| Normal | R$ 6.049,73 | R$ 4.462,36 (4%) |
+| Aumentada | R$ 5.124,79 | R$ 8.924,72 (8%) |
+
+#### Arquivos alterados
+
+| Arquivo | Mudança |
+|---|---|
+| `scripts/import_precificador.py` | **Novo** — lê o `.xlsx` e gera `quote_tables.py` |
+| `src/insurmind/quote_tables.py` | **Novo (gerado)** — 17 estruturas de dado da planilha |
+| `src/insurmind/quote.py` | **Reescrito** — `QuoteInput` (10 campos), `compute_quote()` espelhando fórmulas das células, `QuoteUnavailableError` pra FIPE ausente |
+| `src/insurmind/tools.py` | Schema do `cotar_seguro_auto` reescrito com 10 enums fechados; handler trata `QuoteUnavailableError`; mensagem formatada do resultado atualizada |
+| `src/insurmind/prompts.py` | Coleta progressiva reescrita: 4 turnos com os 10 campos novos (faixa etária em vez de data nascimento, capital em vez de CEP, classe bônus + assistência novas) |
+
+#### Princípios derivados
+
+1. **"Interface estável" é mito quando o domínio ainda não está descoberto.** O mock antigo prometia drop-in replacement do miolo, mas a planilha real trouxe **fatores que ninguém tinha previsto** (Classe de Bônus, Assistência 24h) e **dimensões que ninguém tinha cortado** (CEP virou Capital, data de nascimento virou Faixa Etária, 3 garagens viraram 1 Pernoite). Princípio: pra MVPs onde o domínio está sendo descoberto em paralelo, declare interface **provisória**, não estável — e seja honesto sobre o custo de reescrita quando a real chegar.
+
+2. **Excel é spec, não fonte runtime.** Compilar `.xlsx → .py` via script é um caminho subutilizado. Vantagens: diff git revisável, sem dep em prod, sem leitura de disco. Custo: tem que rodar o script quando a planilha muda — mas isso vira commit, que é exatamente o ponto de controle que se quer.
+
+3. **Decidir judgement calls localmente acelera entrega.** As 3 inconsistências da planilha (fórmula vs células, FIPE ausente, razão da franquia) foram resolvidas em ~5 minutos de análise — esperar resposta do João/Adriele via WhatsApp poderia custar 1-2 dias e ainda assim chegaria a decisões similares. O custo de uma escolha errada é baixo (commit de ajuste); o custo de bloqueio é alto.
+
+---
+
+### 2026-05-26 (tarde) — QA adversarial: fallback silencioso descoberto em produção
+
+Logo após a integração do tarifador real (sessão anterior), Bruno fez **teste adversarial em produção** pedindo cotação para um **"Fiat Estilo IE 2007"** — carro que não existe no catálogo (16 SKUs hatch/SUV recentes, anos 0km a 2023). **O sistema deployed devolveu cotação como se tivesse cotado**: R$ 9.096/ano na Reduzida, R$ 7.708,47 na Normal, com mensagem amigável "Pronto! 🎉 Aqui estão as 3 opções..." sem qualquer alerta.
+
+#### Causa raiz: fallback silencioso no mock antigo
+
+O código deployed (pré-integração 2026-05-26) tinha em `quote.py::_valor_fipe`:
+
+```python
+def _valor_fipe(modelo: str) -> Decimal:
+    key = modelo.strip().lower()
+    if key in MODELOS_VALOR_FIPE:
+        return MODELOS_VALOR_FIPE[key]
+    # Fallback: média dos 8 modelos
+    media = sum(MODELOS_VALOR_FIPE.values(), ...) / Decimal(len(MODELOS_VALOR_FIPE))
+    return media.quantize(...)
+```
+
+Tradução: "se modelo desconhecido, calcula a média dos 8 conhecidos e segue como se nada tivesse acontecido". Combinado com schema antigo da tool (`modelo` como `"type": "string"` sem `enum`), a LLM podia mandar **qualquer string** que o motor calculava uma cotação fabricada — sem erro, sem warning, sem aviso ao usuário.
+
+A LLM ainda agravou o engano colando "igual ao Creta" no diálogo, criando ilusão de continuidade. O usuário final acreditaria que recebeu uma cotação real do Fiat Estilo 2007.
+
+#### Categoria do bug
+
+Esse é um caso clássico de **silent fallback** — anti-pattern documentado em engenharia defensiva. A função encarava dado fora do domínio como caso normal e produzia output plausível em vez de errar. Em chatbots de cotação isso é especialmente perigoso: cotação é número, número parece autoritativo, e o usuário não tem como saber que foi inventado.
+
+**Por que não foi detectado antes**: smoke tests de 2026-05-16 a 2026-05-19 usavam SEMPRE modelos do catálogo (Polo, Onix, Argo, etc.). O fallback nunca acionou em teste. Em produção, qualquer pergunta como "cota meu Gol 2010" / "Civic 2015" / "Uno Mille 2005" disparava o caso degenerado.
+
+#### Já corrigido pelo refator da manhã (2026-05-26)
+
+A integração do tarifador real, **antes mesmo de saber dessa descoberta**, já implementou 3 camadas de defesa:
+
+1. **Schema fechado com `enum`**: `cotar_seguro_auto` agora aceita só 16 valores em `modelo_versao` e 5 em `ano`. A Anthropic API valida antes de chamar o handler — "Fiat Estilo IE 2007" é rejeitado na borda da LLM.
+2. **`_resolver_is_fipe` levanta `ValueError`** se modelo não está em `FATOR_MODELO_POR_CHAVE`. Sem fallback silencioso.
+3. **`QuoteUnavailableError`** trata par modelo×ano sem FIPE (ex.: Kwid Iconic 2023). Handler captura e devolve mensagem amigável pra LLM repassar ao usuário ("Para o Kwid Iconic só tenho 0km e 2026. Qual prefere?").
+
+A descoberta de Bruno **valida o refator da manhã**: o code novo já corrige isso por design, não por sorte.
+
+#### Smoke tests adversariais — `scripts/smoke_quote.py`
+
+Pra evitar regressão, criado script reprodutível com 6 casos (26 asserções):
+
+| # | Caso | O que valida |
+|---|---|---|
+| 1 | Exemplo da planilha (Polo Highline TSI 2026 / SP / 41-55 / M / Compreensiva / Reduzida / Ampliada) | Bate **ao centavo** com B25 da CÁLCULO (R$ 6.974,66) |
+| 2 | **Modelo fora do catálogo** ("Fiat Estilo IE") | Levanta `ValueError` em vez de inventar cotação |
+| 3 | **Modelo válido + ano sem FIPE** (Kwid Iconic 2023) | `QuoteUnavailableError` com `anos_disponiveis` preenchido |
+| 4 | Cobertura "Só RCF-V" sem casco | `valor_franquia = None` nas 3 opções; prêmios IDÊNTICOS (fator franquia não afeta sem casco) |
+| 5 | Handler da tool com modelo inválido | Devolve `{"text": ...}` com mensagem amigável; **não vaza R$ inventado** |
+| 6 | Schema da tool | Todos os 10 campos têm `enum` fechado; modelo_versao tem exatamente 16 SKUs; "Fiat Estilo IE" não está no enum |
+
+Comando: `python scripts/smoke_quote.py`. Resultado final: **26 OK / 0 FAIL** em <1s. Roda antes de cada commit que toca em `quote.py` / `tools.py`.
+
+#### Princípios derivados (vale citar na apresentação)
+
+1. **Fallback silencioso é anti-pattern.** Quando um input fica fora do domínio esperado, **erre alto**, não invente plausível. Em sistemas com LLM isso é especialmente crítico: a LLM vai narrar qualquer output como se fosse correto, dando ao usuário falsa confiança. A regra "errors should be loud" não é teimosia — é proteção contra confiança fabricada.
+
+2. **Schema da tool é guardrail forte, prompt é guardrail fraco.** Antes do refator, o prompt instruía a LLM sobre os 8 modelos disponíveis, mas a LLM ignorou e mandou "Fiat Estilo IE 2007". O schema `enum` fechado, por outro lado, faz a Anthropic API rejeitar a chamada antes do handler ser executado. **Restrições estruturais sempre vencem restrições textuais.** Onde der pra fechar com enum, feche.
+
+3. **QA adversarial precisa ser parte do ciclo, não opcional.** Esse bug ficou em produção por 9 dias (desde 2026-05-17) sem ser detectado, porque os smokes só exercitavam o feliz. O custo de criar `scripts/smoke_quote.py` com 2 casos adversariais é ~30 minutos; o custo de mentir uma cotação pra um usuário real é incalculável.
+
+4. **"Bug em produção" pode virar diferencial pedagógico.** Esse capítulo, somado ao hardening anti-prompt-injection de 2026-05-18 e à calibração RAG de 2026-05-17, forma uma trinca de descobertas via QA adversarial. Pra apresentação, conta uma história coerente: o produto **não foi declarado pronto e esquecido** — foi pressionado por testes adversariais que descobriram problemas reais, todos corrigidos antes da entrega.
+
+---
+
 ## 3. Estado de entrega (snapshot 2026-05-19)
 
 Sumário pro avaliador. Detalhes técnicos nas sessões cronológicas acima.
@@ -1442,7 +1609,7 @@ Sumário pro avaliador. Detalhes técnicos nas sessões cronológicas acima.
 
 ### O que ficou fora do escopo
 
-- **Tarifador real do grupo** (João Carlos + Adriele): planilha não recebida em tempo. Mock `cotar_seguro_auto` com 13 campos cobre o DoD. Interface estável permite plug-in posterior em <30 min.
+- ~~**Tarifador real do grupo** (João Carlos + Adriele)~~ ✅ **Integrado em 2026-05-26** (`Precificador_Seguro_Automóvel_v2.0.xlsx`). Compilado pra `quote_tables.py` via `scripts/import_precificador.py`. Smoke test bate ao centavo com a planilha (R$ 6.974,66/ano no exemplo do CÁLCULO). Contrato reduzido de 13 → 10 campos. Detalhes na sessão "2026-05-26 — Integração do tarifador real".
 - **Slides de apresentação** (~10-12): preparados separadamente (não estão no repo).
 - **Testes automatizados** (`tests/test_quote.py`, `tests/test_rag.py`): smoke test em produção valeu como QA. Não escalou pra TDD por restrição de tempo.
 - **Vídeo de demo**: opcional pelo plano. Demo ao vivo via URL é equivalente.
@@ -1455,7 +1622,7 @@ Sumário pro avaliador. Detalhes técnicos nas sessões cronológicas acima.
 4. **Limpar conversa**: botão no header reseta o histórico (cada conversa começa em estado limpo).
 5. **Perguntas sugeridas pra avaliar diferentes fluxos**:
    - In-scope com RAG: *"O que é prêmio?"*, *"Quais coberturas tem?"*, *"Como funciona a franquia?"*
-   - Cotação multi-turno: *"Quero cotar um seguro"* → o bot vai perguntando os 13 campos em 4 turnos
+   - Cotação multi-turno: *"Quero cotar um seguro"* → o bot vai perguntando os 10 campos em 4 turnos (catálogo: Polo, Argo, Onix, T-Cross, Creta, Dolphin Mini, HB20, Kwid; capitais SP/RJ/BH/POA/CWB/BSB)
    - Off-product → encaminhamento: *"Quero seguro de barco"*
    - Off-domain → refuse: *"Quem descobriu o Brasil?"*
    - Multi-RAG complexo: *"Se eu emprestar meu carro pro meu primo de 22 anos e ele bater, o seguro cobre? E muda alguma coisa se eu não tiver declarado ele como condutor?"*

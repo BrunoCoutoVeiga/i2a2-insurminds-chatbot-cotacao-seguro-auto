@@ -72,11 +72,10 @@ O trabalho está **considerado concluído** pra entrega ao professor. Sumário d
 - ✅ Deploy ativo: frontend Vercel + backend HuggingFace Spaces
 - ✅ Anti-prompt-injection (renomeação de tools + regra no system prompt)
 - ✅ Anonimização Porto Seguro → Porto Inseguro 100% (verificado com grep adversarial)
-- ⚠️ Tarifador real do grupo (João + Adriele) nunca chegou — mock `cotar_seguro_auto` cobre o DoD com interface estável pra troca futura
+- ✅ **Tarifador real do grupo integrado em 2026-05-26** (`Precificador_Seguro_Automóvel_v2.0.xlsx`). Compilado pra `src/insurmind/quote_tables.py` via `scripts/import_precificador.py`. Contrato passou de 13 → 10 campos. Smoke test bate ao centavo com a planilha (R$ 6.974,66/ano).
 
 Se Bruno estiver continuando dev, prováveis frentes ainda em aberto:
-- Receber e plugar o tarifador real (troca de implementação interna de `compute_quote_mock` em `src/insurmind/quote.py`)
-- QA conversacional adicional (10 FAQs do DoD)
+- QA conversacional adicional (10 FAQs do DoD + cenários novos da cotação real)
 - Slides de apresentação (10-12 slides — feito fora do repo)
 - Melhorias técnicas pós-entrega: ativar GPU, ONNX, embeddings via API externa, etc.
 
@@ -244,7 +243,8 @@ chatbot/
 │   │   ├── gemini.py               # ✅ free tier, loop manual (alternativa free pra debug completo)
 │   │   └── ollama.py               # stub
 │   ├── rag.py                      # ✅ retrieval tieirizado em Chroma (primary Porto / fallback SUSEP+FENACOR)
-│   ├── quote.py                    # ✅ motor mock com 13 campos → 3 opções de franquia
+│   ├── quote.py                    # ✅ motor real (tarifador v2.0 do grupo, integrado 2026-05-26) com 10 campos → 3 opções variando franquia
+│   ├── quote_tables.py             # ✅ tabelas geradas a partir de Precificador_Seguro_Automóvel_v2.0.xlsx (NÃO EDITAR — regerar via scripts/import_precificador.py)
 │   ├── events.py                   # ✅ AgentEvent — 8 EventTypes agent-centric (gerúndio, agente como sujeito)
 │   └── ui.py                       # ✅ Streamlit chat multi-turno + Modo Debug step-by-step funcional
 ├── web/                            # ✅ UI Next.js 16 (paralela à Streamlit)
@@ -261,7 +261,8 @@ chatbot/
 │   ├── fetch_porto_faq.py          # ✅ baixa HTMLs da FAQ Porto Auto
 │   ├── build_porto_faq_md.py       # ✅ parseia HTML, categoriza, gera 09-porto-faq.md
 │   ├── anonymize_porto.py          # ✅ anonimiza Porto Inseguro → Porto Inseguro (idempotente)
-│   └── ingest_kb.py                # ✅ chunk + embed e5-base + carga Chroma (312 chunks)
+│   ├── ingest_kb.py                # ✅ chunk + embed e5-base + carga Chroma (312 chunks)
+│   └── import_precificador.py      # ✅ compila Precificador_Seguro_Automóvel_v2.0.xlsx → src/insurmind/quote_tables.py
 ```
 # (pasta tests/ não foi criada — projeto acadêmico priorizou smoke test
 #  manual em produção sobre TDD por restrição de tempo. Quando precisar
@@ -306,13 +307,16 @@ KB organizada em camadas — **Porto Inseguro é a fonte primária**, SUSEP/FENA
 
 **Por que essa ordem:** o glossário do produto (Porto) é específico do contrato do usuário — mais assertivo. SUSEP/FENACOR são definições genéricas do setor (úteis quando o termo não está no produto). Decisão validada pela Adriele na reunião.
 
-**Cotação:**
+**Cotação (motor real do grupo, integrado em 2026-05-26):**
 
-- **Sem fetch FIPE/AUTOSEG** (descartado em 14/05). AUTOSEG não é publicado desde 2021; FIPE+AUTOSEG via API daria um dataset gigante e ruidoso.
-- **Tarifador curado a mão** por João Carlos + Adriele. Bruno construiu um MVP em Excel (8 modelos zero-km mais vendidos: Polo, Argo, Onix, T-Cross, Creta, Dolphin, HB20, Kwid). O grupo refina e devolve.
-- **8 campos coletados do usuário** (especificação Adriele em 2026-05-16): modelo+versão+ano do veículo, CEP de pernoite, data de nascimento + sexo + estado civil do principal condutor, uso (particular/trabalho/aplicativo), garagem em casa/trabalho/fim de semana (3 booleans), há condutor menor de 25 anos, tipo de cobertura desejada (compreensiva / roubo-furto / básica com terceiros).
-- **Saída:** `cotar_seguro_auto` devolve **3 opções variando a franquia** (reduzida/normal/aumentada) — todas do tipo escolhido pelo usuário. Casa com o critério "3 opções de preço com franquia" do plano do João + respeita a escolha de tipo do usuário.
-- Contrato técnico completo (dataclasses `QuoteInput` / `QuoteOption`) na memória `project_mock_quote_interface.md` e em `RELATORIO.md` sessão "2026-05-16 — Especificação do mock de cotação".
+- **Fonte de verdade**: `Precificador_Seguro_Automóvel_v2.0.xlsx` (João Carlos Mendonça, modificada em 2026-05-22). 5 sheets: LEIA-ME, MODELOS (16 SKUs × 5 anos com FIPE real), FATORES (taxas, fatores idade/sexo/uso/garagem/bônus/cobertura/franquia/assistência, carregamento 35%, IOF 7.38%), CAPITAIS (6 capitais com fator regional), CÁLCULO (formulário operacional).
+- **Excel é spec, não fonte runtime**. Compilado via `scripts/import_precificador.py` → `src/insurmind/quote_tables.py` (17 estruturas Python literais). Em prod só roda Python — sem dep `openpyxl`, sem leitura de disco.
+- **10 campos coletados** do usuário em 4 turnos (sem CEP — usa Capital de 6 opções; sem data de nascimento — usa Faixa Etária de 6 categorias; sem estado civil — não entra no cálculo; sem 3 booleans de garagem — usa Pernoite de 3 categorias; sem flag de condutor menor 25; **inclui** Classe de Bônus 0-10 e Assistência 24h Básica/Ampliada).
+- **Fórmula**: `Casco_Prêmio = IS_FIPE × 0.03 × F_Modelo × F_Região × F_Cobertura × F_Franquia × F_Idade × F_Sexo × F_Uso × F_Garagem × F_Bônus`. RCF-V usa LMI fixo R$ 100k × 0.8%. APP usa LMI fixo R$ 20k × 0.3% (só na Compreensiva). Assistência valor fixo. Total final aplica carregamento 35% + IOF 7.38%. Replica fielmente as células B17:B25 da aba CÁLCULO.
+- **Saída**: `cotar_seguro_auto` devolve **3 opções variando a franquia** (Reduzida/Normal/Aumentada — fatores 1.20/1.00/0.80 sobre o prêmio de casco; valor da franquia em sinistro de 2%/4%/8% do FIPE), todas no tipo de cobertura escolhido. Casa com o DoD do João ("3 opções de preço com franquia").
+- **Edge case**: 7 de 80 combinações modelo×ano não têm valor FIPE na planilha (Dolphin sem 2023, HB20 sem 2025, Kwid Iconic só 0km+2026). `QuoteUnavailableError` é levantado e o handler da tool transmite ao usuário com a lista de anos disponíveis.
+- **Inconsistências resolvidas localmente** (sem voltar a perguntar pro grupo): (i) fórmula consolidada da LEIA-ME vs aplicação por componente nas células — adotadas as células (verdade canônica). (ii) APP omite F_Sexo e F_Garagem nas células — mantido (atuarialmente defensável: APP indeniza passageiros, não depende do condutor). Detalhes na sessão "2026-05-26 — Integração do tarifador real" no RELATORIO.md.
+- **Validação numérica**: smoke test `python -m insurmind.quote` reproduz exemplo do CÁLCULO da planilha (Polo Highline TSI 2026 / SP / 41-55 / M / Particular / fechada / Classe 4 / Compreensiva / Reduzida / Ampliada) → R$ 6.974,66/ano. **Bate ao centavo**.
 
 ## Próximos passos (em ordem — Sprint 1)
 
@@ -336,7 +340,7 @@ KB organizada em camadas — **Porto Inseguro é a fonte primária**, SUSEP/FENA
     - Frontend Next.js → Vercel (free tier, integração direta com GitHub)
     - QA conversacional (10 FAQs do DoD do João + edge cases + jailbreak attempts). Cenário recomendado pra demonstrar multi-RAG: *"Se eu emprestar meu carro pro meu primo de 22 anos e ele bater, o seguro cobre? E muda alguma coisa se eu não tiver declarado ele como condutor?"* (mistura 3 conceitos → força 2-3 rodadas de consultar_porto_inseguro).
     - Slides de apresentação (~10-12) destacando RAG tieirizado + Modo Debug como diferencial técnico
-    - Receber tarifador real do João + Adriele e substituir miolo de `cotar_seguro_auto` (interface estável)
+    - ~~Receber tarifador real do João + Adriele e substituir miolo de `cotar_seguro_auto` (interface estável)~~ ✅ Concluído em 2026-05-26 — ver sessão "2026-05-26 — Integração do tarifador real" no RELATORIO.md
 
 ## Princípios de trabalho
 
@@ -355,6 +359,7 @@ KB organizada em camadas — **Porto Inseguro é a fonte primária**, SUSEP/FENA
 - **Multi-deliveries por turno (refator 2026-05-17 tarde):** quando a LLM responde com `[text, tool_use]` na mesma mensagem (anúncio antes de chamar tool), o agente emite **2 eventos `agent_delivering_answer_to_user` separados** no mesmo turno — um após o texto pré-tool e outro após o texto final pós-tool. A UI mostra como bolhas distintas no chat. Razão: a LLM "fala 2 vezes" ao usuário (anúncio + resposta final), e essas duas mensagens devem aparecer **separadas pelo tempo de execução da tool**, não grudadas no fim. Em Modo Debug, push progressivo conforme o usuário avança no `stepIndex` (`pushedDeliveriesRef` no [web/app/page.tsx](web/app/page.tsx) rastreia índices já empurrados).
 - **Logging interno como fonte de verdade do sistema:** `INSURMIND_LOG_LEVEL` (default INFO) configura logger em [api.py](src/insurmind/api.py). Loggers granulares em `insurmind.rag` (queries, decisões de tier, distâncias, source labels), `insurmind.tools` (invocações + tamanho do resultado), `insurmind.llm.anthropic_api` (rounds + stop_reason + tokens). Razão: a narração da LLM ao usuário expressa **intenções**, não eventos do sistema — *log estruturado é a única fonte real do que aconteceu*. Em produção: UI mostra narração da LLM (humana, fluida); log estruturado serve auditoria/debug interno. Não conflite as duas fontes.
 - **Threshold do RAG calibrado empiricamente, não chutado:** `SCORE_THRESHOLD = 0.40` em [rag.py](src/insurmind/rag.py) foi escolhido após observar distâncias reais nos logs. Valor inicial era 1.30 (placeholder) que NUNCA disparava fallback. e5-base nesse domínio comprime distâncias em 0.2-0.4. Princípio: **antes de calibrar parâmetros, instrumente. Antes de instrumentar, suspeite das suposições**. O caso prêmio (5 rounds desnecessários antes de descobrir que fallback nunca tinha rodado) virou estudo de caso desse princípio.
+- **Fallback silencioso é anti-pattern em motor de cotação:** descoberto em produção em 2026-05-26 via QA adversarial — o mock antigo `_valor_fipe` retornava "média dos 8 modelos" pra qualquer modelo desconhecido, sem avisar. Combinado com schema sem `enum`, a LLM mandou "Fiat Estilo IE 2007" e o sistema inventou cotação plausível por 9 dias antes de ser detectado. Lições: (i) lookups fora do domínio devem **levantar exceção**, nunca retornar "razoável"; (ii) **restrição estrutural** (enum no JSON Schema) sempre vence restrição textual (prompt instruindo a LLM); (iii) smokes precisam cobrir adversarial além do feliz — `scripts/smoke_quote.py` agora roda 6 casos (26 asserções) antes de cada commit que toca em quote.py/tools.py. Detalhes em RELATORIO.md sessão "2026-05-26 (tarde) — QA adversarial".
 - **System prompt + tool descriptions são LEAKY por default:** a LLM tem acesso integral ao próprio system prompt e ao parâmetro `tools=[...]` (nomes + descrições). Quando o usuário pergunta meta-coisas ("qual o nome da tool de cotação?"), a LLM revela. Descoberto em 2026-05-18 via teste adversarial — vazamento de `compute_quote_mock` + os 13 campos exatos. Mitigação aplicada: (A) regra de confidencialidade explícita no system prompt + (B) renomeação dos tools pra nomes neutros sem jargão técnico (`consultar_porto_inseguro`, `cotar_seguro_auto`, `encaminhar_atendimento`). Princípio: **nomes de tools são UX, não identificadores internos** — eles aparecem em logs, debug panel, e podem vazar. Tratar como nomes de feature. Detalhes da descoberta em RELATORIO.md sessão "Hardening anti-prompt-injection".
 
 ## URLs de produção
