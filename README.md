@@ -59,7 +59,7 @@ Pedagogicamente alinhado com a aula 6 do curso (Prof. Onelio Ceabra) sobre obser
    │      └─→ [ChromaDB] (312 chunks com embeddings e5-base fp16)
    │            ├─ tier primary: porto-glossario + porto-cg + porto-faq
    │            └─ tier fallback: SUSEP-glossario + SUSEP-cartilha + FENACOR
-   ├─→ [cotar_seguro_auto] — mock de cotação (3 opções de franquia)
+   ├─→ [cotar_seguro_auto] — motor de cotação a partir do tarifador v2.0 do grupo (3 opções variando franquia)
    └─→ [encaminhar_atendimento] — protocolo pra atendimento humano
 ```
 

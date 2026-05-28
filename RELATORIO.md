@@ -11,7 +11,7 @@ Este documento registra **todas as ações** executadas no desenvolvimento do ch
 
 ## 1. Contexto e decisões
 
-Detalhes completos do briefing extraído das aulas em [analise/aula-04-trabalho.md](../analise/aula-04-trabalho.md), [analise/aula-05-trabalho.md](../analise/aula-05-trabalho.md), [analise/aula-06-trabalho.md](../analise/aula-06-trabalho.md). Resumo:
+Detalhes completos do briefing extraído das aulas em [docs/aulas/aula-04-trabalho.md](docs/aulas/aula-04-trabalho.md), [docs/aulas/aula-05-trabalho.md](docs/aulas/aula-05-trabalho.md), [docs/aulas/aula-06-trabalho.md](docs/aulas/aula-06-trabalho.md). Resumo:
 
 - **Produto:** chatbot conversacional de **cotação de seguros de automóveis** em PT-BR.
 - **Restrições:** uso obrigatório de **RAG**, fine-tuning vedado, dados sintéticos permitidos.
@@ -69,8 +69,6 @@ src/insurmind/
 **Ganho**: trocar de motor no futuro será uma mudança localizada (implementar a classe stub correspondente). Tools serão registradas no formato agnóstico e cada provider as traduz para o formato nativo.
 
 ### 2026-05-14 — Coleta de fontes públicas para KB híbrida
-
-**(em andamento — esta seção está sendo preenchida)**
 
 Antes de redigir a base sintética, este projeto faz a coleta de glossários oficiais para reduzir invenção e dar autoridade ao chatbot.
 
