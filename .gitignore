@@ -38,6 +38,14 @@ data/chroma/
 Precificador_Seguro_Autom*.xlsx
 
 # =============================================================================
+# Pasta de entregáveis ao professor — snapshot local com cópias anonimizadas
+# dos docs pra zipar e mandar por email. Conteúdo equivalente aos originais
+# (README.md, RELATORIO.md, docs/visao-geral-do-chatbot.md). Mantida fora do
+# repo público pra não duplicar nem expor versão "anonimizada de membros".
+# =============================================================================
+entrega-professor/
+
+# =============================================================================
 # Modelos / caches de embedding cacheados (~500MB) — ficam em ~/.cache/
 # Mantido aqui pra documentar intent caso algo escape do user dir
 # =============================================================================

@@ -25,7 +25,7 @@ short_description: Backend FastAPI do chatbot acadêmico InsurMind (seguro auto)
 Atende **3 tipos de pergunta** de um segurado de seguro auto:
 
 1. **Dúvidas factuais** sobre o produto (franquia, cobertura, sinistro, prazos) — responde com base na KB oficial, **citando fonte** sempre.
-2. **Cotação simulada** — coleta 13 informações em 4 turnos conversacionais e devolve 3 opções de franquia (reduzida / normal / aumentada).
+2. **Cotação simulada** — coleta 10 informações em 4 turnos conversacionais e devolve 3 opções de franquia (reduzida / normal / aumentada). Motor calculado a partir do tarifador real do grupo (`Precificador_Seguro_Automóvel_v2.0.xlsx`, integrado em 2026-05-26).
 3. **Encaminhamento humano** — questões fora de escopo (outros produtos de seguros, alterações contratuais, reclamações formais) viram protocolo de atendimento.
 
 E pra perguntas **fora do domínio de seguros** (clima, código, opinião) — refuse educado, sem inventar.
@@ -140,7 +140,8 @@ chatbot/
 │   ├── prompts.py                  # System prompt (persona, escopo, guardrails)
 │   ├── tools.py                    # 3 tools: consultar_porto_inseguro, cotar_seguro_auto, encaminhar_atendimento
 │   ├── rag.py                      # Retrieval tieirizado em Chroma
-│   ├── quote.py                    # Motor mock de cotação (13 campos → 3 opções)
+│   ├── quote.py                    # Motor de cotação real (10 campos → 3 opções variando franquia)
+│   ├── quote_tables.py             # Tabelas geradas da planilha v2.0 (regerar via scripts/import_precificador.py)
 │   ├── events.py                   # AgentEvent dataclass (8 EventTypes)
 │   ├── ui.py                       # UI Streamlit alternativa (legacy)
 │   └── llm/                        # Camada de providers agnósticos
@@ -168,7 +169,9 @@ chatbot/
 │   ├── ingest_kb.py                # Chunk + embed + carga no Chroma
 │   ├── fetch_porto_faq.py          # Pipeline de scraping FAQ (uso 1x)
 │   ├── build_porto_faq_md.py       # Parser HTML → markdown
-│   └── anonymize_porto.py          # Anonimização Porto Seguro → Porto Inseguro
+│   ├── anonymize_porto.py          # Anonimização Porto Seguro → Porto Inseguro
+│   ├── import_precificador.py      # Compila planilha do grupo → quote_tables.py
+│   └── smoke_quote.py              # Smoke tests do motor (feliz + adversariais)
 │
 └── docs/
     ├── visao-geral-do-chatbot.md   # Apresentação pro grupo (não-técnica)
