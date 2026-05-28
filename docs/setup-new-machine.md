@@ -511,7 +511,7 @@ Se todos checados, **você está oficialmente migrado**. Boa continuidade do dev
 ## URLs importantes pra ter no bookmark
 
 - **Demo ao vivo (produção)**: https://insurminds-chatbot.vercel.app
-- **Backend (produção)**: https://bveiga-insurminds-api.hf.space
+- **Backend (produção, healthcheck)**: https://bveiga-insurminds-api.hf.space/api/health
 - **Repo GitHub**: https://github.com/BrunoCoutoVeiga/i2a2-insurminds-chatbot-cotacao-seguro-auto
 - **HF Space (Docker)**: https://huggingface.co/spaces/bveiga/insurminds-api
 - **Dashboard Vercel**: https://vercel.com/dashboard

@@ -1243,7 +1243,7 @@ Configuradas no painel `https://huggingface.co/spaces/bveiga/insurminds-api/sett
 | Componente | URL | Plataforma |
 |---|---|---|
 | Frontend Next.js | https://insurminds-chatbot.vercel.app | Vercel (Hobby free) |
-| Backend FastAPI | https://bveiga-insurminds-api.hf.space | HuggingFace Spaces (Docker free) |
+| Backend FastAPI (healthcheck) | https://bveiga-insurminds-api.hf.space/api/health | HuggingFace Spaces (Docker free) |
 | Repo público | https://github.com/BrunoCoutoVeiga/i2a2-insurminds-chatbot-cotacao-seguro-auto | GitHub |
 | Repo Space (HF) | https://huggingface.co/spaces/bveiga/insurminds-api | HuggingFace |
 
@@ -1577,8 +1577,7 @@ Sumário pro avaliador. Detalhes técnicos nas sessões cronológicas acima.
 | Componente | URL | Plataforma |
 |---|---|---|
 | Frontend Next.js | https://insurminds-chatbot.vercel.app | Vercel Hobby (free) |
-| Backend FastAPI | https://bveiga-insurminds-api.hf.space | HuggingFace Spaces Docker (free, 16GB RAM) |
-| Healthcheck | https://bveiga-insurminds-api.hf.space/api/health | retorna `{status: "ok", provider: "anthropic_api", tools_count: 3}` |
+| Backend FastAPI (healthcheck) | https://bveiga-insurminds-api.hf.space/api/health | HuggingFace Spaces Docker (free, 16GB RAM). Retorna `{status: "ok", provider: "anthropic_api", tools_count: 3}` |
 | Repo público GitHub | https://github.com/BrunoCoutoVeiga/i2a2-insurminds-chatbot-cotacao-seguro-auto | source-of-truth |
 | Repo HF Space (Docker source) | https://huggingface.co/spaces/bveiga/insurminds-api | sincronizado com GitHub |
 

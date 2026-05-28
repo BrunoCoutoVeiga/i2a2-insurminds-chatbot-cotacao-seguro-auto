@@ -201,6 +201,5 @@ MIT — ver [LICENSE](LICENSE).
 ## 🔗 Links importantes
 
 - **Demo ao vivo (UI)**: https://insurminds-chatbot.vercel.app
-- **Backend ao vivo (API)**: https://bveiga-insurminds-api.hf.space
-- **Healthcheck**: https://bveiga-insurminds-api.hf.space/api/health
+- **Backend ao vivo (healthcheck)**: https://bveiga-insurminds-api.hf.space/api/health
 - **HF Space (Docker source)**: https://huggingface.co/spaces/bveiga/insurminds-api

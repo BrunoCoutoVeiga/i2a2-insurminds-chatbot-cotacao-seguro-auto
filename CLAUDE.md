@@ -61,7 +61,7 @@ git remote -v             # confirma origin (GitHub) e hf (HuggingFace Space)
 
 Pergunte ao Bruno o que ele quer fazer. URLs importantes pra contexto:
 - **Demo ao vivo (UI)**: https://insurminds-chatbot.vercel.app
-- **Backend ao vivo (API)**: https://bveiga-insurminds-api.hf.space
+- **Backend ao vivo (healthcheck)**: https://bveiga-insurminds-api.hf.space/api/health
 - **Repo público (entrega)**: https://github.com/BrunoCoutoVeiga/i2a2-insurminds-chatbot-cotacao-seguro-auto
 - **Repo HF Space (Docker source)**: https://huggingface.co/spaces/bveiga/insurminds-api
 
@@ -365,7 +365,7 @@ KB organizada em camadas — **Porto Inseguro é a fonte primária**, SUSEP/FENA
 ## URLs de produção
 
 - **Frontend (Next.js)**: https://insurminds-chatbot.vercel.app — Vercel Hobby free
-- **Backend (FastAPI Docker)**: https://bveiga-insurminds-api.hf.space — HuggingFace Spaces free (16GB RAM)
+- **Backend (FastAPI Docker, healthcheck)**: https://bveiga-insurminds-api.hf.space/api/health — HuggingFace Spaces free (16GB RAM)
 - **Repo público (entrega do curso)**: https://github.com/BrunoCoutoVeiga/i2a2-insurminds-chatbot-cotacao-seguro-auto
 - **Repo HF Space**: https://huggingface.co/spaces/bveiga/insurminds-api
 
